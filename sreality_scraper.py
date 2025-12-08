@@ -3,10 +3,16 @@ import json
 import time
 from datetime import datetime
 import os
+import subprocess
 
 class SrealityScraper:
-    def __init__(self):
-        """Initialize scraper"""
+    def __init__(self, enable_github_upload=True, github_repo_path=None):
+        """Initialize scraper
+        
+        Args:
+            enable_github_upload: Set to True to automatically push to GitHub
+            github_repo_path: Path to your GitHub repository folder
+        """
         self.data_file = 'sreality_data.json'
         self.history_file = 'sreality_history.json'
         self.alerts_file = 'sreality_alerts.html'
@@ -15,6 +21,10 @@ class SrealityScraper:
         self.history_html_file = 'sreality_property_history.html'
         self.images_folder = 'property_images'
         self.base_url = 'https://www.sreality.cz/api/cs/v2/estates'
+        
+        # GitHub upload settings
+        self.enable_github_upload = enable_github_upload
+        self.github_repo_path = github_repo_path
         
         # Create images folder if it doesn't exist
         if not os.path.exists(self.images_folder):
@@ -128,7 +138,7 @@ class SrealityScraper:
                         'name': item.get('name', 'N/A'),
                         'price': item.get('price', 0),
                         'locality': item.get('locality', 'N/A'),
-                        'url': f"https://www.sreality.cz/detail/{item['seo']['locality']}/{item['hash_id']}",
+                        'url': f"https://www.sreality.cz/detail/prodej/dum/rodinny/{item['seo']['locality']}/{item['hash_id']}",
                         'area': item.get('usable_area', 'N/A'),
                         'image_url': image_url,
                         'description': description,
@@ -702,6 +712,44 @@ class SrealityScraper:
         
         print(f"✅ Property history saved to {self.history_html_file}")
     
+    def upload_to_github(self):
+        """Automatically commit and push changes to GitHub"""
+        if not self.enable_github_upload or not self.github_repo_path:
+            return
+        
+        try:
+            print("📤 Uploading to GitHub...")
+            
+            # Change to the repository directory
+            original_dir = os.getcwd()
+            os.chdir(self.github_repo_path)
+            
+            # Git commands
+            commands = [
+                ['git', 'add', '.'],
+                ['git', 'commit', '-m', f'Update property data - {datetime.now().strftime("%Y-%m-%d %H:%M")}'],
+                ['git', 'push']
+            ]
+            
+            for cmd in commands:
+                result = subprocess.run(cmd, capture_output=True, text=True)
+                if result.returncode != 0:
+                    # If commit fails because nothing changed, that's okay
+                    if 'nothing to commit' in result.stdout or 'nothing to commit' in result.stderr:
+                        print("No changes to upload")
+                        os.chdir(original_dir)
+                        return
+                    else:
+                        print(f"Git command failed: {' '.join(cmd)}")
+                        print(f"Error: {result.stderr}")
+            
+            print("✅ Successfully uploaded to GitHub!")
+            os.chdir(original_dir)
+            
+        except Exception as e:
+            print(f"❌ Error uploading to GitHub: {e}")
+            os.chdir(original_dir)
+    
     
     
     def format_price(self, price):
@@ -767,6 +815,9 @@ class SrealityScraper:
         self.save_data(current_data)
         self.save_history(history)
         
+        # Upload to GitHub if enabled
+        self.upload_to_github()
+        
         print(f"Found {len(new_properties)} new properties, {len(price_changes)} price changes, {len(removed_properties)} removed")
 
     
@@ -794,8 +845,23 @@ class SrealityScraper:
 
 # Example usage:
 if __name__ == "__main__":
-    # Create scraper instance (no email config needed!)
-    scraper = SrealityScraper()
+    # ===========================================
+    # GITHUB UPLOAD CONFIGURATION (OPTIONAL)
+    # ===========================================
+    # Set to True to enable automatic upload to GitHub Pages
+    ENABLE_GITHUB = True
+    
+    # Path to your GitHub repository folder where HTML files will be uploaded
+    # Example: 'C:\\Users\\Rancy\\Documents\\sreality-tracker'
+    GITHUB_REPO_PATH = 'C:\\Users\\Rancy\\Desktop\\sreality-tracker'
+    
+    # ===========================================
+    
+    # Create scraper instance
+    scraper = SrealityScraper(
+        enable_github_upload=ENABLE_GITHUB,
+        github_repo_path=GITHUB_REPO_PATH
+    )
     
     # Option 1: Run once (e.g., via Task Scheduler)
     # scraper.check_and_notify()
