@@ -87,7 +87,7 @@ class SrealityScraper:
             'price_from': 4948302,
             'price_to': 21623887,
             'usable_area_from': 200,
-            'locality_district_id': 65  # Ostrava-město district
+            'locality_district_id': [65, 64, 66, 67, 69]
         }
         
         headers = {
