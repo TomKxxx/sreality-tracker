@@ -7,7 +7,7 @@ import subprocess
 
 class SrealityScraper:
     def __init__(self, enable_github_upload=True, github_repo_path=None):
-        """Initialize scraper with Radial Search and GitHub Sync"""
+        """Initialize scraper with localized Radial Search"""
         self.data_file = 'sreality_data.json'
         self.history_file = 'sreality_history.json'
         self.alerts_file = 'sreality_alerts.html'
@@ -53,40 +53,38 @@ class SrealityScraper:
             headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
             api_url = f"https://www.sreality.cz/api/cs/v2/estates/{property_id}"
             response = requests.get(api_url, headers=headers, timeout=10)
-            response.raise_for_status()
             data = response.json()
             return data.get('text', {}).get('value', 'No description available')
-        except Exception:
+        except:
             return "Description not available"
     
     def fetch_properties(self):
-        """
-        Performs a 10km Radial Search around Ostrava center.
-        This captures everything inside the circle, even if the district is 'N/A'.
-        """
-        params = {
-            'category_main_cb': 2,        # Houses
-            'category_type_cb': 1,        # For Sale
-            'price_from': 4948302,
-            'price_to': 21623887,
-            'usable_area_from': 200,
-            'locality_region_id': 10,     # Required for GPS distance searches
-            'lat': 49.8209228,            # Ostrava Center Lat
-            'lon': 18.2625243,            # Ostrava Center Lon
-            'distance': 15000,            # 15km radius in meters
-            'per_page': 60
+        """Localized search to Ostrava region only"""
+        # locality_region_id: 13 is Moravian-Silesian Region (MSK)
+        # This prevents Prague results while allowing 'N/A' districts within MSK
+        base_params = {
+            'category_main_cb': 2, 'category_type_cb': 1, 'per_page': 60,
+            'price_from': 4948302, 'price_to': 21623887, 'usable_area_from': 200,
+            'locality_region_id': 13 
         }
+        
+        # We also use GPS to prioritize Ostrava center + 15km
+        base_params.update({
+            'lat': 49.8209228,
+            'lon': 18.2625243,
+            'distance': 15000 
+        })
+
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
         all_properties = {}
         
-        print("\n--- Starting 10km Radial Search around Ostrava ---")
+        print("\n--- Starting Search: Ostrava + 15km (Moravian-Silesian Region) ---")
         page = 1
         while True:
             try:
+                params = base_params.copy()
                 params['page'] = page
-                print(f"  > Fetching page {page}...")
                 response = requests.get(self.base_url, params=params, headers=headers)
-                response.raise_for_status()
                 data = response.json()
                 estates = data.get('_embedded', {}).get('estates', [])
                 if not estates: break
@@ -97,22 +95,18 @@ class SrealityScraper:
                         img_url = item.get('_links', {}).get('images', [{}])[0].get('href')
                         description = self.fetch_property_details(item['seo']['locality'], prop_id)
                         all_properties[prop_id] = {
-                            'id': prop_id,
-                            'name': item.get('name', 'N/A'),
-                            'price': item.get('price', 0),
-                            'locality': item.get('locality', 'N/A'),
+                            'id': prop_id, 'name': item.get('name', 'N/A'),
+                            'price': item.get('price', 0), 'locality': item.get('locality', 'N/A'),
                             'url': f"https://www.sreality.cz/detail/prodej/dum/rodinny/{item['seo']['locality']}/{item['hash_id']}",
-                            'area': item.get('usable_area', 'N/A'),
-                            'image_url': img_url,
-                            'description': description,
-                            'last_updated': datetime.now().isoformat()
+                            'area': item.get('usable_area', 'N/A'), 'image_url': img_url,
+                            'description': description, 'last_updated': datetime.now().isoformat()
                         }
-                if len(estates) < params['per_page']: break
+                if len(estates) < 60: break
                 page += 1
                 time.sleep(1)
-            except Exception as e:
-                print(f"Error on page {page}: {e}")
-                break
+            except: break
+        
+        print(f"Total localized properties found: {len(all_properties)}")
         return all_properties
 
     def download_image(self, image_url, property_id):
@@ -126,87 +120,67 @@ class SrealityScraper:
         except: return None
 
     def save_property_history_html(self, history, current_data):
-        """Generates a visual history report with cards, images, and descriptions"""
         html = """<html><head><meta charset="utf-8">
         <style>
-            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; background: #f0f2f5; color: #1c1e21; }
-            .container { max-width: 1000px; margin: 40px auto; padding: 0 20px; }
-            h1 { text-align: center; color: #1a73e8; margin-bottom: 40px; }
-            .card { background: white; border-radius: 12px; overflow: hidden; display: flex; box-shadow: 0 2px 12px rgba(0,0,0,0.08); margin-bottom: 30px; }
-            .card-image { width: 350px; min-height: 250px; background-position: center; background-size: cover; }
-            .card-content { flex: 1; padding: 25px; display: flex; flex-direction: column; }
-            .card-content h2 { margin-top: 0; font-size: 1.4rem; }
-            .card-content h2 a { text-decoration: none; color: #1a73e8; }
-            .locality { font-weight: 600; color: #5f6368; margin-bottom: 10px; }
-            .description { font-size: 0.9rem; line-height: 1.5; color: #4a4a4a; margin-bottom: 20px; border-top: 1px solid #eee; padding-top: 15px; }
-            .history-table { width: 100%; border-collapse: collapse; background: #f8f9fa; border-radius: 8px; font-size: 0.85rem; }
-            .history-table td { padding: 8px 12px; border-bottom: 1px solid #eee; }
-            .history-table tr:last-child td { border-bottom: none; }
-            .price-val { font-weight: bold; color: #202124; text-align: right; }
-        </style></head><body><div class="container"><h1>🏡 Sreality Property Tracker</h1>"""
+            body { font-family: 'Segoe UI', Tahoma; margin: 0; background: #f0f2f5; }
+            .container { max-width: 900px; margin: 30px auto; padding: 0 15px; }
+            .card { background: white; border-radius: 10px; display: flex; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 25px; overflow: hidden; }
+            .card-img { width: 300px; background-size: cover; background-position: center; }
+            .card-body { flex: 1; padding: 20px; }
+            .card-body h2 { margin: 0 0 10px 0; font-size: 1.3rem; }
+            .card-body a { color: #1a73e8; text-decoration: none; }
+            .locality { color: #666; font-weight: bold; margin-bottom: 10px; }
+            .desc { font-size: 0.85rem; color: #444; border-top: 1px solid #eee; padding-top: 10px; margin-top: 10px; }
+            .history { margin-top: 15px; font-size: 0.8rem; background: #f8f9fa; padding: 10px; border-radius: 5px; }
+        </style></head><body><div class="container"><h1>🏡 Ostrava Property History</h1>"""
 
-        # Only show history for properties currently active in the results
         for p_id in current_data:
             if p_id in history:
-                snaps = history[p_id]
-                latest = snaps[-1]
-                img_path = self.download_image(latest['image_url'], p_id)
-                
-                # Card Layout
+                latest = history[p_id][-1]
+                img = self.download_image(latest['image_url'], p_id)
                 html += f"""
                 <div class="card">
-                    <div class="card-image" style="background-image: url('{img_path if img_path else ''}');"></div>
-                    <div class="card-content">
+                    <div class="card-img" style="background-image: url('{img if img else ''}');"></div>
+                    <div class="card-body">
                         <h2><a href="{latest['url']}" target="_blank">{latest['name']}</a></h2>
                         <div class="locality">📍 {latest['locality']}</div>
-                        <div class="description">{latest['description'][:500]}...</div>
-                        <table class="history-table">"""
-                
-                for s in reversed(snaps):
+                        <div class="desc">{latest['description'][:400]}...</div>
+                        <div class="history"><b>Price History:</b><br>"""
+                for s in reversed(history[p_id]):
                     d = datetime.fromisoformat(s['last_updated']).strftime('%Y-%m-%d %H:%M')
-                    html += f"<tr><td>📅 {d}</td><td class='price-val'>{self.format_price(s['price'])}</td></tr>"
-                
-                html += "</table></div></div>"
+                    html += f"• {d}: {self.format_price(s['price'])}<br>"
+                html += "</div></div></div>"
 
         html += "</div></body></html>"
         with open(self.history_html_file, 'w', encoding='utf-8') as f: f.write(html)
 
     def upload_to_github(self):
-        """Commit all changes (data, reports, and images) to GitHub"""
         if not self.github_repo_path: return
         try:
             os.chdir(self.github_repo_path)
-            # Use 'git add .' to ensure images folder is also uploaded
             subprocess.run(['git', 'add', '.'], check=True)
-            commit_msg = f"Automatic Update {datetime.now().strftime('%Y-%m-%d %H:%M')}"
-            subprocess.run(['git', 'commit', '-m', commit_msg], check=True)
+            msg = f"Update {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+            subprocess.run(['git', 'commit', '-m', msg], check=True)
             subprocess.run(['git', 'push'], check=True)
             print("✅ GitHub update successful.")
-        except Exception as e:
-            print(f"❌ GitHub Error: {e}")
+        except Exception as e: print(f"❌ GitHub Error: {e}")
 
     def run_scraper(self):
         prev = self.load_previous_data()
         history = self.load_history()
         curr = self.fetch_properties()
         
-        # Update history logs
         for p_id, p in curr.items():
             if p_id not in history: history[p_id] = []
-            # Only record a new entry if price has changed or it's the first time
             if not history[p_id] or history[p_id][-1]['price'] != p['price']:
                 history[p_id].append(p)
 
         self.save_data(curr)
         self.save_history(history)
         self.save_property_history_html(history, curr)
-        
-        if self.enable_github_upload:
-            self.upload_to_github()
+        if self.enable_github_upload: self.upload_to_github()
 
 if __name__ == '__main__':
-    # PATH TO YOUR LOCAL GITHUB FOLDER
     REPO_PATH = r"C:\Users\Rancy\Desktop\sreality-tracker" 
-    
     scraper = SrealityScraper(enable_github_upload=True, github_repo_path=REPO_PATH)
     scraper.run_scraper()
