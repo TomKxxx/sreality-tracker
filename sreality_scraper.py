@@ -105,6 +105,7 @@ class SrealityScraper:
     def fetch_property_details(self, detail_url, property_id):
         try:
             response = requests.get(detail_url, headers=self.HEADERS, timeout=10)
+            time.sleep(0.3)
             next_data = self._extract_next_data(response.text)
             estate = self._find_query(next_data, 'estate') or {}
             description = estate.get('description') or 'No description available'
@@ -180,6 +181,10 @@ class SrealityScraper:
             if os.path.exists(path) and os.path.getsize(path) > 1024:
                 return web_path
             r = requests.get(image_url, headers=self.HEADERS, timeout=10)
+            # Sreality's image CDN appears to rate-limit bursts of anonymous requests
+            # (confirmed: hammering it earlier got even brand-new, never-requested image
+            # URLs 401'd). A small gap after every real request avoids tripping that again.
+            time.sleep(0.3)
             if r.status_code != 200 or not r.headers.get('content-type', '').startswith('image/'):
                 return None
             with open(path, 'wb') as f: f.write(r.content)
