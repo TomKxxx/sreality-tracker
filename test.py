@@ -1,6 +1,6 @@
 import requests
 
-property_ids = ["1854534220", "3748074316"]
+property_ids = ["3748074316", "3748074316"]
 
 for pid in property_ids:
     response = requests.get(f"https://www.sreality.cz/api/cs/v2/estates/{pid}")

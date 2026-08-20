@@ -1,0 +1,4 @@
+# Full-fidelity snapshot history - grows unbounded and exceeds GitHub's 100MB
+# per-file limit. Kept locally only; sreality_price_history.json is the
+# lightweight, git-tracked equivalent used by the public history page.
+sreality_history.json
