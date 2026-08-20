@@ -174,11 +174,18 @@ class SrealityScraper:
             path = os.path.join(self.images_folder, f"{property_id}.jpg")
             # Web-facing path must always use forward slashes, regardless of OS.
             web_path = f"{self.images_folder}/{property_id}.jpg"
-            if os.path.exists(path): return web_path
-            r = requests.get(image_url, timeout=10)
+            # A previously-saved file smaller than 1KB is almost certainly a cached
+            # CDN error page (Sreality's CDN 401s on a subset of image URLs), not a
+            # real photo - don't trust the cache, try downloading again.
+            if os.path.exists(path) and os.path.getsize(path) > 1024:
+                return web_path
+            r = requests.get(image_url, headers=self.HEADERS, timeout=10)
+            if r.status_code != 200 or not r.headers.get('content-type', '').startswith('image/'):
+                return None
             with open(path, 'wb') as f: f.write(r.content)
             return web_path
-        except: return None
+        except Exception:
+            return None
 
     def save_property_history_html(self, price_history, current_data):
         html = """<html><head><meta charset="utf-8">
