@@ -4,6 +4,7 @@ Historical asking-price observations are NOT verified sale prices.
 """
 from __future__ import annotations
 import argparse
+from functools import lru_cache
 import hashlib
 import json
 import math
@@ -212,9 +213,13 @@ def legacy_index():
     write_json(target, index)
     print("Legacy archive indexed:", len(index))
 
+@lru_cache(maxsize=1)
+def legacy_history():
+    return read_json(ROOT / "sreality_price_history.json", {})
+
 def legacy_events(ident):
     # Only import detailed price changes for properties seen in a new valid local scan.
-    all_prices = read_json(ROOT / "sreality_price_history.json", {})
+    all_prices = legacy_history()
     rows = all_prices.get(ident, [])
     unique = []
     for row in rows:
@@ -315,6 +320,7 @@ def update(market, incoming, timestamp, day):
                "changes":changes,"status":"ok"}
     write_json(folder/"history.json",history)
     write_json(folder/"current.json",incoming)
+    write_json(folder/"latest.json",payload)
     write_json(folder/"daily"/(day+".json"),payload)
     return payload
 
