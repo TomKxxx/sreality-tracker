@@ -107,7 +107,7 @@ def best_image(item):
 
 def property_row(item, url, market, timestamp):
     ident = str(item.get("id") or "")
-    if not ident.isdecimal() or not url:
+    if not ident.isdecimal():
         return None
     gps = coords(item)
     if gps and distance_km(*gps) > RADIUS_KM:
@@ -147,6 +147,7 @@ def fetch_market(market, timestamp, sleep=0.6):
     collection = {}
     max_pages = 60
     source_page_count = 0
+    expected_page_size = None
     for page in range(1, max_pages + 1):
         url = BASE + SEARCH[market]
         params = {"region": "Ostrava", "region-id": 4730, "region-typ": "municipality",
@@ -157,27 +158,33 @@ def fetch_market(market, timestamp, sleep=0.6):
         items = payload.get("results")
         if not isinstance(items, list):
             raise RuntimeError("Sreality results missing; retaining previous snapshot")
-        total = (payload.get("pagination") or {}).get("total")
+        pageinfo = payload.get("pagination") or {}
+        raw_total = pageinfo.get("total")
+        try:
+            total = int(raw_total)
+        except (ValueError, TypeError):
+            total = None
+        if expected_page_size is None:
+            try:
+                expected_page_size = int(pageinfo.get("limit") or pageinfo.get("pageSize") or len(items))
+            except (ValueError, TypeError):
+                expected_page_size = len(items)
         if page == 1 and not items:
             raise RuntimeError("Zero search results; refusing to treat as empty market")
         hrefs = link_map(response.text, market)
         for item in items:
             ident = str(item.get("id") or "")
-            url = hrefs.get(ident)
-            if not url:
-                # Stable fallback URL; only recorded if id is valid.
-                if not ident.isdecimal():
-                    continue
-                url = BASE + ("/detail/prodej/dum/rodinny/unknown/" if market == "sale"
-                              else "/detail/pronajem/dum/rodinny/unknown/") + ident
+            # Do not fabricate a listing URL when the site omits it.
+            url = hrefs.get(ident) or ""
             row = property_row(item, url, market, timestamp)
             if row:
                 collection[row["id"]] = row
         source_page_count += 1
-        if not items or (isinstance(total, int) and page * len(items) >= total):
+        if not items or (total is not None and page * expected_page_size >= total):
             break
-        # Total may be missing. Last partial page means last page.
-        if len(items) < 20:
+        # A full scan is required to infer absences. An incomplete page is
+        # a valid end only when the source does not provide a total.
+        if total is None and len(items) < expected_page_size:
             break
         if page == max_pages:
             raise RuntimeError("Reached page safety cap, scan incomplete")
