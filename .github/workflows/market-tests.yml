@@ -1,0 +1,22 @@
+name: Market tracker tests
+on:
+  pull_request:
+    paths:
+      - 'market_tracker.py'
+      - 'tests/**'
+      - '.github/workflows/market-tests.yml'
+      - 'index.html'
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r requirements-market.txt
+      - run: python -m py_compile market_tracker.py
+      - run: python -m unittest discover -s tests -v

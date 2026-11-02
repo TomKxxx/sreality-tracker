@@ -1,0 +1,52 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0a302c">
+<title>Historical Archive | Ostrava Property Lens</title><style>
+:root{--green:#146e57;--ink:#183732;--muted:#72867d;--edge:#e0e8df}*{box-sizing:border-box}
+body{margin:0;font:14px/1.5 system-ui,-apple-system,Segoe UI,Arial,sans-serif;background:#f5f8f5;color:var(--ink)}
+a{text-decoration:none;color:inherit}header{background:linear-gradient(125deg,#082d2d,#175246);color:#e6f7ed;padding:35px max(18px,calc((100vw - 1240px)/2))}
+header a{color:#b7e2cc;font-size:12px;font-weight:750}h1{font-size:clamp(32px,5vw,51px);letter-spacing:-1.9px;margin:13px 0 5px}header p{color:#b8d5c8;max-width:790px;font-size:13px}
+.wrap{max-width:1280px;padding:0 22px;margin:30px auto 70px}.notice{background:#eef5ef;border:1px solid #d5e8da;padding:14px 17px;border-radius:7px;color:#456956;font-size:12px;margin-bottom:22px}
+.controls{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px;align-items:center}.controls input,.controls select{border:1px solid #ceddd3;border-radius:7px;background:white;padding:11px 12px;font:inherit;min-width:160px}
+.controls input{flex:1;min-width:220px}.controls select{max-width:220px}.stat{font-weight:800;margin:14px 0 18px;color:#366c5c}
+.cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:15px}
+.card{border:1px solid var(--edge);border-radius:9px;background:#fff;overflow:hidden;box-shadow:0 10px 24px #052c1a0a}
+.photo{height:166px;background:linear-gradient(135deg,#d4e9dc,#bfd7c9);display:grid;place-items:center;font-size:10px;color:#5d9380}
+.photo img{width:100%;height:100%;object-fit:cover}.body{padding:14px}.body h3{font-size:13px;min-height:38px;margin:7px 0}.place{font-size:10px;letter-spacing:1px;color:#0d7963;font-weight:800;text-transform:uppercase}.price{font-size:20px;letter-spacing:-.5px;font-weight:800}.compare{font-size:11px;color:#749184;margin:7px 0}.compare b{color:#0e755e}
+.date{border-top:1px solid var(--edge);padding-top:10px;margin-top:11px;font-size:10px;color:#8ea297}
+.card a.original{display:block;margin-top:8px;color:var(--green);font-size:11px;font-weight:750}
+button{padding:10px 20px;border:1px solid #bfdaca;border-radius:6px;background:#fff;color:#136e57;font-weight:700;cursor:pointer}
+#more{display:block;margin:25px auto}.empty{grid-column:1/-1;text-align:center;background:#fff;padding:48px;border:1px dashed #afcec0;border-radius:9px}
+@media(max-width:1100px){.cards{grid-template-columns:repeat(3,1fr)}}@media(max-width:760px){.cards{grid-template-columns:repeat(2,1fr)}}@media(max-width:520px){.cards{grid-template-columns:1fr}.photo{height:220px}header{padding:35px 20px}}
+</style></head><body><header><a href="index.html">← Main dashboard: sale & rent</a><h1>Historical property archive.</h1>
+<p>Original price observations from the earlier Sreality tracker, preserved as a separately labelled archive. Compare initial and last recorded asking prices without confusing withdrawn ads with verified completed sales.</p></header>
+<main class="wrap"><div class="notice"><b>Important:</b> Historical records may be outside Ostrava's 15 km search radius. "Last seen" means last recorded snapshot—not sold or rented. These are historical asking prices, not transaction prices. Some entries were captured before today's tracker and lack verified property details.</div>
+<div class="controls"><input type="search" id="q" placeholder="Search address, locality, listing ID…" aria-label="Search legacy houses">
+<select id="sort"><option value="latest">Most recently observed</option><option value="cut">Largest recorded reduction</option><option value="price">Highest last asking price</option><option value="oldest">Oldest first seen</option></select>
+<select id="min"><option value="0">All price levels</option><option value="8000000">Last price 8m+</option><option value="10000000">Last price 10m+</option><option value="15000000">Last price 15m+</option></select></div>
+<p class="stat" id="total">Loading original archive…</p><section class="cards" id="cards"></section><button id="more" hidden>Load more historic adverts ↓</button></main>
+<script>
+(function(){"use strict";
+var source=[],limit=36;
+var $=function(x){return document.getElementById(x)};
+var fmt=function(n){return Number(n||0).toLocaleString("en-GB")+" CZK"};
+function dom(tag,c,text){var e=document.createElement(tag);if(c)e.className=c;if(text!==undefined)e.textContent=text;return e}
+function draw(){
+var q=$("q").value.toLowerCase().trim(),min=Number($("min").value);
+var list=source.filter(function(p){return p.last_price>=min&&[p.id,p.locality,p.name].join(" ").toLowerCase().includes(q)});
+var sort=$("sort").value;
+list.sort(function(a,b){if(sort==="cut")return (a.first_price-a.last_price)-(b.first_price-b.last_price)<0?1:-1;if(sort==="price")return b.last_price-a.last_price;if(sort==="oldest")return String(a.first_seen).localeCompare(String(b.first_seen));return String(b.last_seen).localeCompare(String(a.last_seen))});
+$("total").textContent=list.length.toLocaleString("en-GB")+" historical property IDs";var cards=$("cards");cards.textContent="";
+if(!list.length){cards.append(dom("div","empty","No historical records match these filters."));$("more").hidden=true;return}
+list.slice(0,limit).forEach(function(p){
+var card=dom("article","card"),photo=dom("div","photo","ORIGINAL PHOTO NOT AVAILABLE");
+if(p.image_url&&p.image_url.startsWith("https://")){var img=dom("img");img.src=p.image_url;img.loading="lazy";img.alt="Original property advert";img.onerror=function(){img.remove()};photo.textContent="";photo.append(img)}
+card.append(photo);var body=dom("div","body");body.append(dom("div","place",p.locality||"Location unverified"));body.append(dom("h3","",p.name||p.id));body.append(dom("div","price",fmt(p.last_price)));
+var diff=p.last_price-p.first_price;body.append(dom("div","compare",fmt(p.first_price)+" first observed → "+(diff<0?"Reduced "+fmt(-diff):diff>0?"Increased "+fmt(diff):"Unchanged")));
+body.append(dom("div","date","First "+String(p.first_seen||"—").slice(0,10)+" · Last "+String(p.last_seen||"—").slice(0,10)+" · "+p.observations+" observations"));
+if(p.url&&p.url.startsWith("https://")){var a=dom("a","original","Original advert ↗");a.href=p.url;a.target="_blank";a.rel="noopener noreferrer";body.append(a)}
+card.append(body);cards.append(card)});
+$("more").hidden=limit>=list.length}
+$("q").addEventListener("input",function(){limit=36;draw()});["sort","min"].forEach(function(id){$(id).addEventListener("change",function(){limit=36;draw()})});
+$("more").addEventListener("click",function(){limit+=36;draw()});
+fetch("data/legacy_sale_index.json?ts="+Date.now(),{cache:"no-store"}).then(function(r){if(!r.ok)throw Error("Archive not published");return r.json()}).then(function(data){source=Array.isArray(data)?data:[];draw()}).catch(function(){ $("total").textContent="Legacy archive index not yet generated";$("cards").append(dom("div","empty","The first successful cloud scan will create this index from the original untouched price-history file."))});
+})();
+</script></body></html>

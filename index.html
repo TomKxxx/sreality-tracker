@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0b3634"><meta name="description" content="Independent tracked house prices and rental market around Ostrava.">
+<title>Ostrava Property Lens | Sale & Rental History</title>
+<style>
+:root{--ink:#143333;--muted:#708582;--line:#dfe9e3;--green:#0c745d;--surface:#fff;--bg:#f6f8f6;--forest:#082c2c}*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 Inter,ui-sans-serif,system-ui,"Segoe UI",Arial,sans-serif}
+button,input,select{font:inherit}button{cursor:pointer}a{color:inherit;text-decoration:none}
+.wrap{max-width:1380px;margin:auto;padding:0 30px}
+.brandbar{height:33px;background:#092929;color:#acccc0;display:flex;justify-content:center;align-items:center;letter-spacing:2px;font-size:10px;font-weight:750}
+header{height:76px;display:flex;align-items:center;justify-content:space-between}
+.logo{font-size:20px;letter-spacing:-.6px;font-weight:800;color:var(--ink)}.logo span{color:var(--green)}.logo small{display:block;color:var(--muted);font-size:9px;letter-spacing:2px;font-weight:700}
+header nav{display:flex;gap:24px;font-size:12px;color:#56756d}
+.hero{background:radial-gradient(ellipse at 85% 25%,#20695c44,transparent 46%),linear-gradient(115deg,#082c2c,#144645);color:#f7fdfb;overflow:hidden}
+.hero .wrap{display:flex;justify-content:space-between;align-items:center;min-height:324px;gap:24px}
+.kicker{font-size:10px;text-transform:uppercase;letter-spacing:2.4px;font-weight:800;color:#9acbb8;margin:0 0 13px}
+h1{font-size:clamp(37px,4.4vw,59px);line-height:1.08;letter-spacing:-2.3px;margin:0 0 18px}
+h1 em{font-family:Georgia,serif;color:#b2e0cd;font-weight:400}
+.hero p.lead{color:#b6cbc5;max-width:650px;font-size:14px;line-height:1.8}
+.lens{flex-shrink:0;width:260px;height:260px;border:1px solid #6caa9c60;border-radius:50%;display:grid;place-items:center;position:relative;font:italic 95px Georgia,serif;color:#b0d6c9}
+.lens:before,.lens:after{content:"";position:absolute;border:1px solid #7bb7a43d;border-radius:50%}.lens:before{width:200px;height:200px}.lens:after{width:135px;height:135px}
+.hero-meta{font-size:11px;color:#b0d3c7;margin-top:22px}.live{display:inline-block;background:#82d5b5;height:8px;width:8px;border-radius:50%;margin-right:8px}
+nav.tabs{display:flex;border-bottom:1px solid #d9e4dd;gap:6px;margin-top:27px}
+.tabs button{background:transparent;border:0;border-bottom:3px solid transparent;color:#708b80;padding:17px 24px;font-weight:750}
+.tabs button.active{border-color:var(--green);color:var(--green)}.section-header{display:flex;align-items:end;justify-content:space-between;gap:12px;margin:32px 0 21px}
+.section-header h2{font-size:30px;letter-spacing:-.9px;line-height:1.2;margin:0}.section-header p{color:var(--muted);margin:7px 0 0}
+.outlink{color:var(--green);font-weight:750;font-size:12px}
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:22px 0}
+.metric{background:#fff;border:1px solid var(--line);border-radius:10px;padding:19px 21px;box-shadow:0 8px 23px #0e40300a}
+.metric span{font-size:11px;color:var(--muted);display:block}.metric strong{display:block;font-size:37px;letter-spacing:-1.3px;margin:4px 0}.metric small{color:#8da09a;font-size:10px}
+.notice{background:#edf5ee;border:1px solid #cee5d6;border-radius:7px;padding:13px 18px;color:#537365;font-size:12px;margin:22px 0 28px}
+.workspace{display:grid;grid-template-columns:255px minmax(0,1fr);gap:25px;align-items:start;margin-bottom:85px}
+aside{background:#fff;border:1px solid var(--line);border-radius:10px;padding:21px;position:sticky;top:15px}
+aside h3{margin:0 0 18px;font-size:17px}aside label{display:block;margin:15px 0 7px;font-size:11px;font-weight:750}
+aside input,aside select,.sort select{width:100%;border:1px solid #dbe7df;border-radius:6px;padding:10px 11px;background:#fff;color:#344d44;outline:0}
+aside input:focus,aside select:focus,.sort select:focus{border-color:#35957c}aside .reset{color:#0f7760;background:none;border:0;padding:0;margin:14px 0}
+aside .note{font-size:10px;color:#92a39b;border-top:1px solid var(--line);padding-top:14px}
+.listtop{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:16px}
+.listtop h3{margin:0;font-size:20px}.sort{display:flex;align-items:center;gap:10px;font-size:11px;color:var(--muted)}.sort select{width:170px}
+.cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:17px}
+.card{background:white;border:1px solid var(--line);border-radius:10px;overflow:hidden;box-shadow:0 9px 27px #1241300d;min-width:0}
+.photo{height:175px;background:linear-gradient(135deg,#dbeae2,#bdd9ce);position:relative;display:grid;place-items:center;overflow:hidden;color:#719b8d;font-size:11px}
+.photo img{width:100%;height:100%;object-fit:cover}.tag{position:absolute;left:11px;top:11px;background:#ecf8ef;color:#167153;font-size:9px;font-weight:800;letter-spacing:.5px;padding:6px 8px;border-radius:5px}
+.tag.new{background:#e5eefc;color:#376da0}.tag.absent{background:#fff0df;color:#98622b}
+.cardbody{padding:16px}.location{color:#468775;text-transform:uppercase;letter-spacing:1.2px;font-size:10px;font-weight:750;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card h4{min-height:37px;margin:8px 0;font-size:14px;line-height:1.4}.price{font-size:22px;letter-spacing:-.7px;font-weight:800}.price small{font-size:10px;color:#82958d;letter-spacing:0}
+.facts{display:flex;gap:9px;flex-wrap:wrap;margin:12px 0 18px}.facts span{font-size:10px;border:1px solid #e1ebe5;border-radius:5px;padding:6px 9px}
+.cardfooter{border-top:1px solid #edf1ec;padding-top:12px;display:flex;justify-content:space-between;align-items:center;gap:5px}
+.cardfooter small{font-size:10px;color:#8c9f97}.cardfooter button{border:0;border-radius:6px;background:#e7f4ec;padding:8px 10px;color:#0b795d;font-size:11px;font-weight:700}
+.empty{grid-column:1/-1;padding:48px;text-align:center;background:white;border:1px dashed #c7dbd1;border-radius:9px;color:var(--muted)}
+.more{display:block;margin:25px auto;border:1px solid #cddfd4;border-radius:7px;background:white;padding:12px 30px;color:var(--green);font-weight:750}
+footer{background:#092d2c;color:#b4d2c5;padding:33px 0;font-size:12px}footer .wrap{display:flex;justify-content:space-between}
+dialog{border:0;border-radius:12px;max-width:735px;width:calc(100vw - 24px);max-height:83vh;padding:28px;box-shadow:0 30px 130px #061e1d80}
+dialog::backdrop{background:#031a19ad}dialog h2{font-size:26px;margin:8px 36px 10px 0}
+.close{float:right;border:0;background:none;font-size:27px;color:#81938a}
+.timeline{border-left:2px solid #c4e1d4;margin:20px 10px;padding:2px 0 2px 20px}.event{margin:0 0 15px;position:relative}.event:before{content:"";position:absolute;left:-26px;top:7px;width:9px;height:9px;background:#3aa787;border-radius:50%}.event small{color:#79988a}
+.modal-photo{width:100%;height:170px;object-fit:cover;border-radius:9px}
+@media(max-width:1120px){.cards{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:760px){.wrap{padding:0 17px}.hero .wrap{min-height:290px}.lens{display:none}.workspace{grid-template-columns:1fr}aside{position:static;display:grid;grid-template-columns:repeat(2,1fr);column-gap:13px}aside h3,aside .note{grid-column:1/-1}.metrics{grid-template-columns:repeat(2,1fr)}header nav a:last-child{display:none}}
+@media(max-width:550px){.brandbar{letter-spacing:1px}.logo{font-size:17px}.hero .wrap{padding-top:33px;padding-bottom:33px}h1{letter-spacing:-1.3px}.hero p.lead{font-size:12px}.tabs button{padding:13px 14px;font-size:12px}.section-header{flex-direction:column;align-items:start}.section-header h2{font-size:25px}.metric{padding:13px}.metric strong{font-size:29px}.cards{grid-template-columns:1fr}.photo{height:225px}aside{grid-template-columns:1fr}.listtop{align-items:start;flex-direction:column}footer .wrap{display:block}}
+</style></head><body>
+<div class="brandbar">● INDEPENDENT OSTRAVA PROPERTY MARKET MONITOR · 15 KM</div>
+<header class="wrap"><a class="logo" href="index.html">PROPERTY <span>LENS</span><small>OSTRAVA · CZECHIA</small></a><nav><a href="https://github.com/TomKxxx/sreality-tracker">Source archive ↗</a><a href="archive.html">Search historical archive ↗</a><a href="sreality_property_history.html">Original tracker ↗</a></nav></header>
+<section class="hero"><div class="wrap"><div><p class="kicker">Independent market intelligence</p><h1>Property prices,<br><em>under the microscope.</em></h1>
+<p class="lead">Explore houses for sale and rent across Ostrava. Identify reductions, review price history and find houses that disappeared from the market—without pretending that disappearance means sold.</p>
+<div class="hero-meta"><span class="live"></span><span id="updated">Awaiting cloud market scan</span> · Asking prices, not recorded transactions</div></div><div class="lens">O</div></div></section>
+<main class="wrap">
+<nav class="tabs" role="tablist"><button type="button" class="active" data-market="sale">Houses for sale <span id="sale-count"></span></button><button type="button" data-market="rent">Houses for rent <span id="rent-count"></span></button></nav>
+<div class="section-header"><div><p class="kicker" style="color:#0c745d">Daily market overview</p><h2 id="section-title">For sale: the full picture</h2><p id="subtitle">New listings, advertised prices and changes over time.</p></div><a class="outlink" id="report-link" href="reports/sale/latest.html">View full daily report ↗</a></div>
+<div class="metrics"><article class="metric"><span>Currently advertised</span><strong id="m-inventory">—</strong><small>Tracked listings</small></article><article class="metric"><span>New this scan</span><strong id="m-new">—</strong><small>Not in prior history</small></article><article class="metric"><span>Price reductions</span><strong id="m-reduced">—</strong><small>Compared with previous observation</small></article><article class="metric"><span>Newly absent</span><strong id="m-absent">—</strong><small>Not proven sold or rented</small></article></div>
+<div class="notice"><b>How to interpret these data:</b> All figures are asking prices. A removed advert is not evidence of a completed sale or tenancy. Some properties lack exact coordinates, so their radius is unverified. Historical snapshots include legacy data outside the search area; they are not used to calculate current inventory.</div>
+<div class="workspace"><aside><h3>Refine results</h3><label for="search">Search by locality or ID</label><input id="search" placeholder="Stará Bělá, Krmelín, ID…" type="search">
+<label for="status">Status</label><select id="status"><option value="active">Currently advertised</option><option value="all">All tracked</option><option value="absent">No longer advertised</option></select>
+<label for="activity">Daily activity</label><select id="activity"><option value="all">Any activity</option><option value="new">New</option><option value="reduced">Reduced</option><option value="increased">Increased</option><option value="absent">Newly absent</option></select>
+<label for="minprice" id="price-label">Minimum asking price</label><select id="minprice"><option value="0">Any price</option><option value="5000000">5m CZK+</option><option value="8000000">8m CZK+</option><option value="10000000">10m CZK+</option><option value="12000000">12m CZK+</option><option value="15000000">15m CZK+</option></select>
+<label for="area">Minimum usable area</label><select id="area"><option value="0">Any size</option><option value="150">150m²+</option><option value="200">200m²+</option><option value="250">250m²+</option><option value="300">300m²+</option></select>
+<button class="reset" type="button" id="reset">Reset filters</button><p class="note">Images are shown from their original listing source or an archived source where rights permit. Property dimensions are seller-provided.</p></aside>
+<section><div class="listtop"><h3><span id="matches">0</span> matching properties</h3><div class="sort"><label for="sort">Sort</label><select id="sort"><option value="price-desc">Highest price</option><option value="price-asc">Lowest price</option><option value="recent">Recently observed</option><option value="cut">Largest reduction</option><option value="size">Largest house</option></select></div></div>
+<div id="cards" class="cards"><div class="empty">Loading property history…</div></div><button type="button" id="more" class="more" hidden>Show more properties ↓</button></section></div></main>
+<footer><div class="wrap"><span>◇ PROPERTY LENS · OSTRAVA</span><span>Open source data methodology · Unverified removals ≠ confirmed sales</span></div></footer>
+<dialog id="detail"><button class="close" type="button" id="close" aria-label="Close">×</button><div id="detail-content"></div></dialog>
+<script>
+(function(){
+"use strict";
+var market="sale",limit=24,records={sale:null,rent:null};
+var byId=function(id){return document.getElementById(id)},fmt=function(n){return Number(n).toLocaleString("en-GB")+" Kč"};
+function el(tag,className,content){var e=document.createElement(tag);if(className)e.className=className;if(content!==undefined)e.textContent=content;return e}
+function date(s){if(!s)return "Unknown";var d=new Date(String(s).replace(" ","T"));return isNaN(d.getTime())?String(s).slice(0,10):d.toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"})}
+function summary(){var d=records[market],c=d&&d.counts||{};byId("m-inventory").textContent=d?d.inventory:"—";["new","reduced","absent"].forEach(function(k){byId("m-"+k).textContent=d?c[k]||0:"—"});byId("updated").textContent=d?"Last scan "+date(d.observed_at):"Awaiting first verified cloud scan"}
+function setMarket(m){market=m;limit=24;document.querySelectorAll(".tabs button").forEach(function(b){b.classList.toggle("active",b.dataset.market===m)});byId("section-title").textContent=m==="sale"?"For sale: the full picture":"For rent: the full picture";byId("subtitle").textContent=m==="sale"?"Monitor asking prices, reductions and withdrawals.":"Monitor monthly rents, reductions and rental availability.";byId("report-link").href="reports/"+m+"/latest.html";byId("price-label").textContent=m==="sale"?"Minimum asking price":"Minimum monthly rent";byId("minprice").innerHTML=m==="sale"?'<option value="0">Any price</option><option value="5000000">5m+</option><option value="8000000">8m+</option><option value="10000000">10m+</option><option value="12000000">12m+</option><option value="15000000">15m+</option>':'<option value="0">Any rent</option><option value="20000">20k+</option><option value="30000">30k+</option><option value="40000">40k+</option><option value="50000">50k+</option><option value="65000">65k+</option>';byId("status").value="active";byId("activity").value="all";render()}
+function changedSet(d,kind){return new Set((d&&d.changes||[]).filter(function(x){return x.kind===kind}).map(function(x){return x.id}))}
+function hist(p){return p.events||[]}
+function cut(p){var a=hist(p);return a.length?Math.max(0,Number(a[0].price)-p.price):0}
+function render(){
+summary();["sale","rent"].forEach(function(m){byId(m+"-count").textContent=records[m]?" · "+records[m].inventory:""});
+var latest=records[market],container=byId("cards");container.textContent="";
+if(!latest){container.append(el("div","empty","No verified published scan yet. The scheduled scanner will fill this section when its source is accessible."));byId("matches").textContent="0";byId("more").hidden=true;return}
+var all=Object.values(latest.properties||{}),flags={},k;["new","reduced","increased","absent"].forEach(function(x){flags[x]=changedSet(latest,x)});
+var search=byId("search").value.toLocaleLowerCase().trim(),status=byId("status").value,activity=byId("activity").value,minp=+byId("minprice").value,mina=+byId("area").value;
+all=all.filter(function(p){if(search&&!String([p.name,p.locality,p.source_id,p.id].join(" ")).toLocaleLowerCase().includes(search))return false;if(status==="active"&&p.status!=="active")return false;if(status==="absent"&&p.status!=="absent_unverified")return false;if(activity!=="all"&&!flags[activity].has(p.id))return false;if(p.price<minp)return false;if((p.usable_m2||0)<mina)return false;return true});
+var sort=byId("sort").value;all.sort(function(a,b){if(sort==="price-asc")return a.price-b.price;if(sort==="size")return (b.usable_m2||0)-(a.usable_m2||0);if(sort==="cut")return cut(b)-cut(a);if(sort==="recent")return String(b.observed_at).localeCompare(String(a.observed_at));return b.price-a.price});
+byId("matches").textContent=all.length.toLocaleString("en-GB");byId("more").hidden=all.length<=limit;
+if(!all.length){container.append(el("div","empty","No properties match these filters."));return}
+all.slice(0,limit).forEach(function(p){
+var card=el("article","card"),photo=el("div","photo"),im=p.photo_path||p.image_url;
+if(im&&/^https:\/\//.test(im)||im&&/^assets\/photos\//.test(im)){var img=el("img");img.loading="lazy";img.alt="Photo of "+(p.locality||"house");img.src=im;img.onerror=function(){img.replaceWith(el("span","","Photo unavailable"))};photo.append(img)}else photo.textContent="PHOTO NOT AVAILABLE";
+var t=flags.reduced.has(p.id)?"↓ PRICE REDUCED":flags.new.has(p.id)?"NEW LISTING":p.status==="absent_unverified"?"NOT ADVERTISED":"";
+if(t){var b=el("span","tag"+(t==="NEW LISTING"?" new":t==="NOT ADVERTISED"?" absent":""),t);photo.append(b)}
+card.append(photo);var body=el("div","cardbody");body.append(el("div","location",p.locality||"Unknown location"));body.append(el("h4","",p.name||"House"));var price=el("div","price",fmt(p.price));if(market==="rent")price.append(el("small",""," / month + charges where applicable"));body.append(price);
+var facts=el("div","facts");facts.append(el("span","",(p.usable_m2||"?")+" m² house"));facts.append(el("span","",(p.plot_m2||"?")+" m² plot"));body.append(facts);
+var foot=el("div","cardfooter");foot.append(el("small","","First tracked "+date(p.first_seen)));var btn=el("button","","Price history ↗");btn.addEventListener("click",function(){details(p)});foot.append(btn);body.append(foot);card.append(body);container.append(card)
+})}
+function details(p){var root=byId("detail-content");root.textContent="";var im=p.photo_path||p.image_url;if(im){var img=el("img","modal-photo");img.alt="Listing photo";img.src=im;root.append(img)}
+root.append(el("p","kicker","PROPERTY PRICE HISTORY · "+p.id));root.append(el("h2","",p.name));root.append(el("p","",p.locality+" · "+fmt(p.price)+(market==="rent"?"/month":"")));
+if(p.url&&/^https:\/\//.test(p.url)){var a=el("a","outlink","Open original advert ↗");a.href=p.url;a.target="_blank";a.rel="noopener noreferrer";root.append(a)}
+root.append(el("p","notice","Status: "+p.status+". An absent advert is NOT a proven sale or rental. Legacy events may have unverified coordinates."));
+var box=el("div","timeline");hist(p).slice().reverse().forEach(function(e){var row=el("div","event");row.append(el("small","",e.at||"Date unknown"));row.append(el("div","price",fmt(e.price)));row.append(el("small","",e.source==="legacy"?"Imported historical price · unverified location":"Observed asking price"));box.append(row)});if(!hist(p).length)box.append(el("p","","No recorded price changes"));root.append(box);byId("detail").showModal()}
+async function get(m){try{var r=await fetch("data/"+m+"/latest.json?t="+Date.now(),{cache:"no-store"});if(!r.ok)throw Error("No summary");var d=await r.json();var cur=await fetch("data/"+m+"/current.json?t="+Date.now(),{cache:"no-store"});if(!cur.ok)throw Error("No inventory");d.properties=await cur.json();records[m]=d}catch(e){console.warn(m,e)}}
+document.querySelectorAll(".tabs button").forEach(function(b){b.addEventListener("click",function(){setMarket(b.dataset.market)})});
+["search","status","activity","minprice","area","sort"].forEach(function(x){byId(x).addEventListener(x==="search"?"input":"change",function(){limit=24;render()})});
+byId("reset").addEventListener("click",function(){byId("search").value="";byId("status").value="active";byId("activity").value="all";byId("minprice").value="0";byId("area").value="0";render()});
+byId("more").addEventListener("click",function(){limit+=24;render()});byId("close").addEventListener("click",function(){byId("detail").close()});Promise.all([get("sale"),get("rent")]).then(function(){setMarket(location.hash==="#rent"?"rent":"sale")});
+})();
+</script></body></html>

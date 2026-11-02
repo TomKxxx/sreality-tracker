@@ -1,0 +1,61 @@
+name: Ostrava sale & rent market history
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Both BST and GMT candidates. Gate ensures only the 10:00 UK run proceeds.
+    - cron: '0 9 * * *'
+    - cron: '0 10 * * *'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ostrava-property-history
+  cancel-in-progress: false
+
+jobs:
+  track:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Evaluate UK local time
+        id: timecheck
+        shell: bash
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] || [ "$(TZ=Europe/London date +%H)" = "10" ]; then
+            echo "scan=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "scan=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.timecheck.outputs.scan == 'true'
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        if: steps.timecheck.outputs.scan == 'true'
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+      - name: Install dependencies
+        if: steps.timecheck.outputs.scan == 'true'
+        run: python -m pip install -r requirements-market.txt
+      - name: Run automated tests
+        if: steps.timecheck.outputs.scan == 'true'
+        run: python -m unittest discover -s tests -v
+      - name: Scan both markets (sale and rent)
+        if: steps.timecheck.outputs.scan == 'true'
+        run: python market_tracker.py --market both
+      - name: Save daily snapshots and separate reports
+        if: always() && steps.timecheck.outputs.scan == 'true'
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data reports assets/photos
+          if ! git diff --cached --quiet; then
+            git commit -m "Daily Ostrava property data $(TZ=Europe/Prague date +%F)"
+            git push origin HEAD:main
+          else
+            echo "No new observations to commit"
+          fi
