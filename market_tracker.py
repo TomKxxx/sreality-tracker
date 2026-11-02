@@ -319,10 +319,93 @@ def update(market, incoming, timestamp, day):
                "over_10m":sum(v["price"]>=10_000_000 for v in incoming.values()) if market=="sale" else None,
                "changes":changes,"status":"ok"}
     write_json(folder/"history.json",history)
+    export_csv(market, history)
+    generate_report(market, payload, incoming, history)
     write_json(folder/"current.json",incoming)
     write_json(folder/"latest.json",payload)
     write_json(folder/"daily"/(day+".json"),payload)
     return payload
+
+
+def export_csv(market, history):
+    """Cumulative one-row-per-price-observation file; preserve unmodified JSON too."""
+    import csv
+    output = DATA / market / "history.csv"
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with output.open("w", newline="", encoding="utf-8-sig") as file:
+        writer = csv.writer(file)
+        writer.writerow(["listing_id", "source_id", "market", "locality", "first_seen",
+                         "last_seen", "status", "event_date", "asking_price_czk",
+                         "event_source", "original_url", "photo_path", "image_source_url"])
+        for record in history.values():
+            for event in record.get("events", []):
+                writer.writerow([record.get("id"), record.get("id","").split(":")[-1],
+                                 market, record.get("locality"), record.get("first_seen"),
+                                 record.get("last_seen"), record.get("status"), event.get("at"),
+                                 event.get("price"), event.get("source"), record.get("url"),
+                                 record.get("photo_path"), record.get("image_url")])
+
+def generate_report(market, payload, current, history):
+    """Write separately dated HTML reports for the two property markets."""
+    import html
+    from urllib.parse import urlparse
+    date = payload["date"]
+    title = "Houses for sale" if market == "sale" else "Houses for rent"
+    changes = payload["changes"]
+    counts = payload["counts"]
+    def esc(value):
+        return html.escape(str(value or ""), quote=True)
+    def money(value):
+        return f"{int(value):,} CZK" if value is not None else "Not stated"
+    metrics = [("Active listings", payload["inventory"]), ("New", counts["new"]),
+               ("Reduced", counts["reduced"]), ("Increased", counts["increased"]),
+               ("Newly absent", counts["absent"])]
+    metric_html = "".join('<div class="metric"><small>'+esc(label)+'</small><strong>'+str(value)+'</strong></div>'
+                           for label, value in metrics)
+    rows = []
+    for change in changes[:120]:
+        record = current.get(change["id"]) or history.get(change["id"]) or {}
+        name = esc(record.get("name") or change["id"])
+        locality = esc(record.get("locality") or "Location not confirmed")
+        url = record.get("url") or ""
+        href = '<a class="link" href="'+esc(url)+'" rel="noopener" target="_blank">Original advert ↗</a>' if url.startswith("https://") else '<small>Advert URL unavailable</small>'
+        photo = record.get("photo_path") or record.get("image_url") or ""
+        if photo.startswith("assets/photos/"):
+            photo = "../../" + photo
+        img = '<img src="'+esc(photo)+'" loading="lazy" alt="Listing photo">' if (photo.startswith("https://") or photo.startswith("../../assets/")) else '<div class="noimage">Photo unavailable</div>'
+        oldprice = money(change.get("old"))
+        newprice = money(change.get("new"))
+        subtitle = {"new":"New listing", "reduced":"Price reduced", "increased":"Price increased",
+                    "absent_unverified":"Advert no longer observed", "returned":"Returned listing"}.get(change["kind"], change["kind"])
+        delta = str(change.get("percent"))+"%" if change.get("percent") is not None else ""
+        rows.append('<article class="item">'+img+'<div><span class="eyebrow">'+esc(subtitle)+'</span><h3>'+name+
+                    '</h3><p>'+locality+'</p><p><b>'+oldprice+' → '+newprice+'</b> '+esc(delta)+'</p>'+href+'</div></article>')
+    html_text = """<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>"""+title+" | Ostrava Property Lens | "+date+"""</title><style>
+*{box-sizing:border-box}body{margin:0;font:14px/1.5 system-ui,sans-serif;background:#f5f8f6;color:#153631}
+header{background:linear-gradient(130deg,#072c2b,#195548);padding:50px max(20px,calc((100vw - 980px)/2));color:#fff}
+header a{color:#a9e2cb}h1{font-size:clamp(33px,5vw,50px);margin:18px 0 8px}
+header p{color:#bbd8cb}.wrap{max-width:1000px;margin:30px auto;padding:0 20px}
+.metrics{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}.metric{background:white;padding:19px;border:1px solid #dae5dc;border-radius:9px}
+.metric small{color:#69877a;display:block}.metric strong{font-size:33px;display:block}
+.notice{background:#e9f4ed;padding:14px 18px;border-left:4px solid #269171;margin:24px 0}
+.item{display:flex;background:white;border:1px solid #e0eae2;border-radius:10px;overflow:hidden;gap:18px;margin:12px 0;align-items:center}
+.item img,.noimage{width:195px;height:145px;object-fit:cover;background:#d9e5de;flex-shrink:0;display:grid;place-items:center;color:#78948a;font-size:11px}
+.item>div:last-child{padding:12px 12px 12px 0}.item h3{margin:3px 0;font-size:16px}
+.item p{margin:5px 0;color:#687f75}.link{color:#09775c;font-weight:750}.eyebrow{font-size:10px;color:#08735a;font-weight:800;text-transform:uppercase;letter-spacing:1px}
+@media(max-width:720px){.metrics{grid-template-columns:repeat(2,1fr)}.item img,.noimage{width:115px;height:125px}.item{gap:9px}.item h3{font-size:13px}}
+</style></head><body><header><a href="../../index.html">← Back to Property Lens dashboard</a><h1>"""+title+"""</h1><p>Daily market update · """+date+""" · Ostrava + 15 km</p></header>
+<main class="wrap"><section class="metrics">"""+metric_html+"""</section>
+<p class="notice"><b>Data limitation:</b> Prices are advertised, not completed transaction prices.
+Disappeared adverts are NOT proof of sold or rented status. Search radius may be unverified for individual locations.
+Additional monthly rental charges are not reliably supplied in these search cards.</p>
+<h2>Daily listing changes</h2>"""+("".join(rows) if rows else "<p>No listing changes were detected in this scan.</p>")+"""
+<p><a class="link" href="../../data/"""+market+"""/history.csv">Download complete historical observations (CSV) ↗</a></p></main></body></html>"""
+    directory = ROOT / "reports" / market
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / (date+".html")).write_text(html_text,encoding="utf-8")
+    (directory / "latest.html").write_text(html_text,encoding="utf-8")
 
 def main():
     parser=argparse.ArgumentParser()
