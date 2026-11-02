@@ -319,6 +319,26 @@ def update(market, incoming, timestamp, day):
         row["first_seen"] = history[ident]["first_seen"]
         row["events"] = history[ident]["events"]
         row["status"] = "active"
+    # The public dashboard must retain withdrawn adverts, not only active ones.
+    # These do NOT count towards active inventory or verified completed sales.
+    dashboard_records = dict(incoming)
+    for ident, entry in history.items():
+        if ident in dashboard_records or entry.get("status") != "absent_unverified":
+            continue
+        events = entry.get("events") or []
+        if not events:
+            continue
+        dashboard_records[ident] = {
+            "id": ident, "source_id": ident.split(":")[-1], "source": "sreality.cz",
+            "market": market, "name": entry.get("name", "Historic house"),
+            "locality": entry.get("locality", "Unknown locality"),
+            "price": events[-1].get("price"), "usable_m2": entry.get("usable_m2"),
+            "plot_m2": entry.get("plot_m2"), "url": entry.get("url", ""),
+            "image_url": entry.get("image_url", ""),
+            "photo_path": entry.get("photo_path", ""), "events": events,
+            "first_seen": entry.get("first_seen"), "observed_at": entry.get("last_seen"),
+            "status": "absent_unverified"
+        }
     payload = {"date":day,"observed_at":timestamp,"market":market,"source":"sreality.cz",
                "scope":"Ostrava + 15 km advertised search; some listings without GPS not independently radius-verified",
                "counts":counts,"inventory":len(incoming),
@@ -328,7 +348,7 @@ def update(market, incoming, timestamp, day):
     write_json(folder/"history.json",history)
     export_csv(market, history)
     generate_report(market, payload, incoming, history)
-    write_json(folder/"current.json",incoming)
+    write_json(folder/"current.json",dashboard_records)
     write_json(folder/"latest.json",payload)
     write_json(folder/"daily"/(day+".json"),payload)
     return payload
