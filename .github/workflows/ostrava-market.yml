@@ -2,6 +2,11 @@ name: Ostrava sale & rent market history
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'market_tracker.py'
+      - '.github/workflows/ostrava-market.yml'
   schedule:
     # Both BST and GMT candidates. Gate ensures only the 10:00 UK run proceeds.
     - cron: '0 9 * * *'
@@ -23,7 +28,7 @@ jobs:
         id: timecheck
         shell: bash
         run: |
-          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] || [ "$(TZ=Europe/London date +%H)" = "10" ]; then
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] || [ "$GITHUB_EVENT_NAME" = "push" ] || [ "$(TZ=Europe/London date +%H)" = "10" ]; then
             echo "scan=true" >> "$GITHUB_OUTPUT"
           else
             echo "scan=false" >> "$GITHUB_OUTPUT"
