@@ -34,7 +34,7 @@ class PropertyHistoryTests(unittest.TestCase):
 
     def test_new_cut_and_absent_are_not_sales(self):
         with tempfile.TemporaryDirectory() as folder:
-            with patch.object(m,"DATA",Path(folder)), patch.object(m,"legacy_events",return_value=[]), patch.object(m,"archive_photo",return_value=""):
+            with patch.object(m,"DATA",Path(folder)), patch.object(m,"ROOT",Path(folder)), patch.object(m,"legacy_events",return_value=[]), patch.object(m,"archive_photo",return_value=""):
                 a=m.update("sale",{"sreality:123":self.row()},"2026-11-02T10:00:00+01:00","2026-11-02")
                 self.assertEqual(a["counts"]["new"],1)
                 b=m.update("sale",{"sreality:123":self.row(11000000)},"2026-11-03T10:00:00+01:00","2026-11-03")
