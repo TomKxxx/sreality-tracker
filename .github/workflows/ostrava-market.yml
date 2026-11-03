@@ -51,6 +51,8 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: Scan both markets (sale and rent)
         if: steps.timecheck.outputs.scan == 'true'
+        env:
+          ARCHIVE_IMAGES: '1'
         run: python market_tracker.py --market both
       - name: Save daily snapshots and separate reports
         if: always() && steps.timecheck.outputs.scan == 'true'
