@@ -360,7 +360,7 @@ def update(market, incoming, timestamp, day, source_status=None):
                 changes.append({"kind":kind,"id":ident,"old":last_price,"new":row["price"],
                                 "percent":round((row["price"]/last_price-1)*100,2) if last_price else None})
                 entry.setdefault("events", []).append({"at":timestamp,"price":row["price"],"source":"observed"})
-            if entry.get("status") != "active":
+            if entry.get("status") != "active" and row.get("source") == "sreality.cz":
                 counts["returned"] += 1
                 changes.append({"kind":"returned","id":ident,"old":last_price,"new":row["price"]})
             entry["status"] = "active"
