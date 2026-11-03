@@ -1,6 +1,6 @@
 # Ostrava Property Lens — GitHub Pages market tracker
 
-A public dashboard for **sale and rental house listings** in and around Ostrava, with separate daily reports and cumulative asking-price history.
+A public dashboard for **sale and rental house listings** in and around Ostrava, with separate daily reports and cumulative asking-price history. The primary source is Sreality; secondary sources are **partial, best-effort monitoring** of other portals and estate agents, not a guarantee of every advert.
 
 ## Pages
 
@@ -16,7 +16,7 @@ A public dashboard for **sale and rental house listings** in and around Ostrava,
 
 \`.github/workflows/ostrava-market.yml\` runs via GitHub Actions at a target of **10:00 Europe/London**, whether the owner's laptop is on or off. UTC 09:00/10:00 schedule slots with a UK local-time guard account for BST/GMT. GitHub may delay scheduled workflows.
 
-The workflow runs \`python -m unittest discover -s tests -v\`, then \`python market_tracker.py --market both\` and commits successful observation snapshots and reports. If the source fails, the previous snapshot is retained and a dated error record is written. Both categories are tracked separately.
+The workflow runs \`python -m unittest discover -s tests -v\`, then \`python market_tracker.py --market both\` with \`EXTRA_SOURCES=1\` and \`ARCHIVE_IMAGES=1\`, and commits successful observation snapshots and reports. If the source fails, the previous snapshot is retained and a dated error record is written. Both categories are tracked separately.
 
 ## Critical limitations
 
@@ -24,9 +24,9 @@ The workflow runs \`python -m unittest discover -s tests -v\`, then \`python mar
 2. **These are asking prices**, not sale-price indices or transaction figures.
 3. **The 15 km search is based on Sreality's 15 km query.** Records with exact coordinates are verified; those without coordinates are flagged as radius-unverified.
 4. **Sreality integration is unofficial.** The site may block automated access, change its Next.js embedded search layout or limit image fetches. Check source usage and scraping terms before relying on continuous data.
-5. **Photos:** the tracker keeps source photo URLs and any already archived property images. Automatic downloading/re-publication of third-party marketing photographs is disabled by default (\`ARCHIVE_IMAGES=0\`) pending rights to do so. The dashboard shows listing photos from their source if allowed and available; image disappearance cannot be prevented without suitable rights.
+5. **Photos:** the GitHub Actions job enables \`ARCHIVE_IMAGES=1\` to attempt archiving actual card photos in \`assets/photos/<market>/\`. Existing photos are retained after listing disappearance. Download failures are non-fatal and original source images can be blocked; publication of third-party marketing photographs may require a licence or permission.
 6. **Legacy data:** original raw files remain untouched. Legacy pricing history is attached when an old listing ID reappears in a currently verified scan. All other old IDs remain in a labelled archive (outside-radius status unknown), not counted in current Ostrava inventory.
-7. **Coverage:** current GitHub Actions collector scans Sreality only; it does not falsely claim multi-agency complete market coverage. Other portals can be incorporated later with stable-source identifiers and deduplication.
+7. **Coverage:** Sreality is the primary radius query. Additional discovery checks Reality iDNES, Bezrealitky, M&M Reality, RE/MAX, RealityMIX, ČeskéReality, TRIMEX Reality and Bazoš. These are partial search-card samples. Each source's status appears in dashboard **Source coverage**, including access denied, robots excluded, or no parseable cards. Broader portals and agents may include listings outside the radius until independently verified. Missing adverts on partial sources are NEVER classified as sold or withdrawn; after eight days without re-observation, they are displayed as stale/unverified in history. Strict cross-source matching merges only confident duplicates; others may remain separate.
 8. **Rentals:** base advertised monthly rent is recorded, but extra charges/utilities and deposits cannot be reliably inferred from search cards and are not set to zero.
 9. **First run required:** until the first successful GitHub Actions scan, the new dashboard displays “awaiting scan” rather than invented current inventory.
 
