@@ -149,7 +149,9 @@ def card_image(link, page_url, source):
             if not address.startswith("https://"):
                 continue
             filename = urlsplit(address).path.lower()
-            if any(x in filename for x in ("logo", "avatar", "icon", "sprite", "agent")):
+            from photo_quality import suspect_url
+            if suspect_url(address) or any(x in filename for x in
+                   ("logo", "avatar", "icon", "sprite", "agent", "makler", "profil")):
                 continue
             return address
         current = current.parent
