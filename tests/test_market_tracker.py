@@ -17,6 +17,28 @@ class PropertyHistoryTests(unittest.TestCase):
             "lat":49.80,"lon":18.20,"observed_at":"2026-11-02T10:00:00+01:00"
         }
 
+    def test_photo_candidates_use_seznam_image_transform(self):
+        original = "https://d18-a.sdn.cz/d_18/c_img_qG_D/abc/123.jpeg"
+        options = m.photo_candidates(original)
+        self.assertTrue(options[0].startswith(original + "?fl=res,400,300,3"))
+        self.assertIn(original, options)
+        self.assertEqual(m.photo_candidates("https://example.org/photo.jpg"),
+                         ["https://example.org/photo.jpg"])
+
+    def test_photo_access_denied_stops_further_retries(self):
+        from types import SimpleNamespace
+        with tempfile.TemporaryDirectory() as folder:
+            img = "https://d18-a.sdn.cz/d_18/c_img_qG_D/abc/123.jpeg"
+            mocked = SimpleNamespace(status_code=403, headers={}, content=b"")
+            with patch.object(m, "ROOT", Path(folder)), patch.dict(m.os.environ, {"ARCHIVE_IMAGES": "1"}), \
+                 patch.object(m.SESSION, "get", return_value=mocked) as http:
+                m.PHOTO_BLOCKED_HOSTS.clear()
+                row = {**self.row(), "image_url": img}
+                self.assertEqual(m.archive_photo(row, "sale"), "")
+                self.assertEqual(m.archive_photo(row, "sale"), "")
+                self.assertEqual(http.call_count, 1)
+                m.PHOTO_BLOCKED_HOSTS.clear()
+
     def test_radius(self):
         self.assertLess(m.distance_km(49.82,18.26),1)
         self.assertGreater(m.distance_km(50.2,19.2),15)
