@@ -280,6 +280,7 @@ def archive_photo(row, market):
     host = urlsplit(url).hostname or ""
     if host in PHOTO_BLOCKED_HOSTS:
         return ""
+    denied = []
     for candidate in photo_candidates(url):
         try:
             response = SESSION.get(
@@ -287,10 +288,8 @@ def archive_photo(row, market):
                 headers={"Referer": "https://www.sreality.cz/", "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8"},
             )
             if response.status_code in (401, 403, 429):
-                PHOTO_BLOCKED_HOSTS.add(host)
-                print("Photo CDN access denied:", host, "HTTP", response.status_code,
-                      "- stop further requests to this host")
-                return ""
+                denied.append(response.status_code)
+                continue
             if response.status_code >= 500:
                 # Server unavailable. Do not flood a failing image service.
                 PHOTO_BLOCKED_HOSTS.add(host)
@@ -321,6 +320,10 @@ def archive_photo(row, market):
             return str(path.relative_to(ROOT)).replace("\\", "/")
         except (requests.RequestException, OSError, ValueError) as error:
             print("Photo download error:", row["id"], type(error).__name__, str(error)[:120])
+    if denied and len(denied) == len(photo_candidates(url)):
+        PHOTO_BLOCKED_HOSTS.add(host)
+        print("Photo CDN blocked all variants:", host, "HTTP codes", denied,
+              "- skipping further downloads from this host")
     return ""
 
 def update(market, incoming, timestamp, day):
