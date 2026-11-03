@@ -8,8 +8,6 @@ on:
       - 'market_tracker.py'
       - 'extra_sources.py'
       - 'requirements-market.txt'
-      - 'tests/**'
-      - 'index.html'
       - '.github/workflows/ostrava-market.yml'
   schedule:
     # Both BST and GMT candidates. Gate ensures only the 10:00 UK run proceeds.
@@ -21,7 +19,7 @@ permissions:
 
 concurrency:
   group: ostrava-property-history
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   track:
