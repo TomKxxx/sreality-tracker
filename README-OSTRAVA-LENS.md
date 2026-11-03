@@ -30,6 +30,17 @@ The workflow runs \`python -m unittest discover -s tests -v\`, then \`python mar
 8. **Rentals:** base advertised monthly rent is recorded, but extra charges/utilities and deposits cannot be reliably inferred from search cards and are not set to zero.
 9. **First run required:** until the first successful GitHub Actions scan, the new dashboard displays “awaiting scan” rather than invented current inventory.
 
+## Cover-photo quality
+
+The scanner prefers property photographs to estate-agent headshots. When archiving is enabled, it:
+1. Skips known agent/portrait/image-logo URLs from search results.
+2. Checks saved photos with a local OpenCV frontal-face classifier; only a *prominent* face triggers replacement, not a small person in a garden.
+3. Looks for a high-confidence matched listing at another source (same asking price, usable area and two distinctive street/location tokens) and reuses an already archived house photograph.
+4. Checks the original advert's gallery if necessary, subject to robots.txt permissions and a per-run request limit.
+5. Clears the display image when no appropriate replacement is available instead of displaying a headshot.
+
+The original listing link is retained. When another source supplies the photo, the metadata includes `photo_source_listing`. Face detection is conservative and can occasionally miss a profile/obscured face or reject a property image; the archive is not a person-identification system. Photo-quality decisions are cached by image hash in `data/photo_quality_cache.json` to avoid repeat work.
+
 ## Administration
 
 After merging to \`main\`:
