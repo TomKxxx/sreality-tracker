@@ -441,7 +441,7 @@ def update(market, incoming, timestamp, day, source_status=None):
                "scope":"Ostrava + 15 km advertised search; some listings without GPS not independently radius-verified",
                "counts":counts,"inventory":len(incoming),
                "source_status":source_status or {},
-               "sources_scanned":1+sum(1 for x in (source_status or {}).values() if x.get("state")=="partial_ok"),
+               "sources_scanned":1+sum(1 for x in (source_status or {}).values() if x.get("state") in ("partial_ok", "partial_with_errors")),
                "source_listing_count":{"sreality":sum(r.get("source")=="sreality.cz" for r in incoming.values()),
                     **{k:v.get("results",0) for k,v in (source_status or {}).items()}},
                "large_houses":sum((v.get("usable_m2") or 0)>=150 for v in incoming.values()),
