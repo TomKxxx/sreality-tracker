@@ -372,7 +372,8 @@ def choose_property_photo(row, market, previous_photo, incoming, old_current):
 
     # If no matching property exists, inspect a small number of real advert
     # galleries, respecting their robots.txt and rate limits.
-    if row.get("source") != "sreality.cz":
+    if (row.get("source") != "sreality.cz" and
+            os.environ.get("ARCHIVE_IMAGES", "0") == "1"):
         for image_url in pq.gallery_alternatives(row):
             if image_url == row.get("image_url") or pq.suspect_url(image_url):
                 continue
