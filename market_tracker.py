@@ -236,38 +236,92 @@ def legacy_events(ident):
             unique.append({"at": row.get("date", ""), "price": int(row["price"]), "source": "legacy"})
     return unique
 
+# Prevent a blocked CDN from being hammered hundreds of times in one scan.
+PHOTO_BLOCKED_HOSTS = set()
+PHOTO_HTTP_ERRORS = {}
+
+def photo_candidates(url):
+    """Use the Seznam CDN's documented-style image transform URL, then raw original."""
+    if not url or not url.startswith("https://"):
+        return []
+    from urllib.parse import urlsplit, urlunsplit
+    parsed = urlsplit(url)
+    if not (parsed.hostname == "sdn.cz" or parsed.hostname.endswith(".sdn.cz")):
+        return [url]
+    base = urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
+    options = [
+        base + "?fl=res,400,300,3|shr,,20|jpg,90",
+        base + "?fl=res,720,540,3|shr,,20|jpg,90",
+        url,
+    ]
+    return list(dict.fromkeys(options))
+
 def archive_photo(row, market):
-    """Best effort identifying thumbnail; always keep attribution/source and never overwrite.
-    Photos belong to their respective copyright owners; public reuse requires rights.
+    """Archive an actual validated image, never a CDN error page.
+    Respect 403/429 blocks rather than repeatedly retrying a denied host.
+    Photos remain owned by their respective copyright owners.
     """
     if os.environ.get("ARCHIVE_IMAGES", "0") != "1" or not row.get("image_url"):
         return ""
+    from io import BytesIO
+    from urllib.parse import urlsplit
+    from PIL import Image, ImageOps, UnidentifiedImageError
     folder = ROOT / "assets" / "photos" / market
     folder.mkdir(parents=True, exist_ok=True)
-    path = folder / (row["source_id"] + ".jpg")
+    path = folder / (str(row["source_id"]) + ".jpg")
     if path.exists() and path.stat().st_size > 1000:
         try:
-            from PIL import Image
             with Image.open(path) as check:
                 check.verify()
             return str(path.relative_to(ROOT)).replace("\\", "/")
-        except Exception:
+        except (OSError, UnidentifiedImageError):
             path.unlink(missing_ok=True)
-    try:
-        from io import BytesIO
-        from PIL import Image, ImageOps
-        response = SESSION.get(row["image_url"], timeout=15)
-        response.raise_for_status()
-        if not response.headers.get("content-type","").startswith("image/") or len(response.content)>6_000_000:
-            return ""
-        with Image.open(BytesIO(response.content)) as original:
-            image = ImageOps.exif_transpose(original).convert("RGB")
-            image.thumbnail((720, 540))
-            image.save(path, format="JPEG", quality=78, optimize=True)
-        return str(path.relative_to(ROOT)).replace("\\", "/")
-    except Exception as error:
-        print("Photo unavailable:", row["id"], type(error).__name__)
+    url = row["image_url"]
+    host = urlsplit(url).hostname or ""
+    if host in PHOTO_BLOCKED_HOSTS:
         return ""
+    for candidate in photo_candidates(url):
+        try:
+            response = SESSION.get(
+                candidate, timeout=12,
+                headers={"Referer": "https://www.sreality.cz/", "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8"},
+            )
+            if response.status_code in (401, 403, 429):
+                PHOTO_BLOCKED_HOSTS.add(host)
+                print("Photo CDN access denied:", host, "HTTP", response.status_code,
+                      "- stop further requests to this host")
+                return ""
+            if response.status_code >= 500:
+                # Server unavailable. Do not flood a failing image service.
+                PHOTO_BLOCKED_HOSTS.add(host)
+                print("Photo CDN unavailable:", host, "HTTP", response.status_code)
+                return ""
+            if response.status_code >= 400:
+                count = PHOTO_HTTP_ERRORS.get(response.status_code, 0)
+                PHOTO_HTTP_ERRORS[response.status_code] = count + 1
+                if count < 3:
+                    print("Photo URL failed:", row["id"], "HTTP", response.status_code,
+                          "candidate:", candidate.split("?")[0])
+                continue
+            kind = response.headers.get("content-type", "").lower()
+            if not kind.startswith("image/") or len(response.content) > 6_000_000:
+                print("Photo invalid response:", row["id"], kind[:60])
+                continue
+            with Image.open(BytesIO(response.content)) as original:
+                image = ImageOps.exif_transpose(original).convert("RGB")
+                image.thumbnail((720, 540))
+                if min(image.size) < 80:
+                    continue
+                temporary = path.with_suffix(".tmp")
+                try:
+                    image.save(temporary, format="JPEG", quality=80, optimize=True)
+                    temporary.replace(path)
+                finally:
+                    temporary.unlink(missing_ok=True)
+            return str(path.relative_to(ROOT)).replace("\\", "/")
+        except (requests.RequestException, OSError, ValueError) as error:
+            print("Photo download error:", row["id"], type(error).__name__, str(error)[:120])
+    return ""
 
 def update(market, incoming, timestamp, day):
     folder = DATA / market
