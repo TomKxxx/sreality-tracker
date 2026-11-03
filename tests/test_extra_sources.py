@@ -45,7 +45,7 @@ class ExtraPortalTests(unittest.TestCase):
         self.assertEqual(rows, {})
 
     def test_rental_not_sale_at_remax(self):
-        html = """<article><a href="/reality/detail/pronajem-domu/306-NP83777/">
+        html = """<article><a href="/reality/detail/450039/pronajem-domu-129-m2-ostrava">
         Pronájem domu 129 m², Ostrava Hrabek 42 000 Kč</a></article>"""
         sale = x.parse_cards(html, self.source("remax"), "sale", self.TS,
                              "https://www.remax-czech.cz/reality/domy-a-vily/prodej/moravskoslezky-kraj/ostrava/")
