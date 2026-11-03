@@ -65,7 +65,18 @@ jobs:
           done
           if ! git diff --cached --quiet; then
             git commit -m "Daily Ostrava property data $(TZ=Europe/Prague date +%F)"
-            # Another commit may land during the scan. Rebase the generated\n          # data commit on the latest main rather than rejecting the upload.\n          for attempt in 1 2 3 4 5; do\n            git fetch origin main\n            if ! git rebase -X theirs origin/main; then\n              git rebase --abort || true\n              echo "Rebase conflict: preserving remote data and failing safely"\n              exit 1\n            fi\n            if git push origin HEAD:main; then break; fi\n            if [ "$attempt" -eq 5 ]; then exit 1; fi\n            sleep 3\n          done
+            # Rebase scanner output onto new commits made while scanning.
+            for attempt in 1 2 3 4 5; do
+              git fetch origin main
+              if ! git rebase -X theirs origin/main; then
+                git rebase --abort || true
+                echo "Rebase conflict; refusing to discard remote changes."
+                exit 1
+              fi
+              if git push origin HEAD:main; then break; fi
+              if [ "$attempt" -eq 5 ]; then exit 1; fi
+              sleep 3
+            done
           else
             echo "No new observations to commit"
           fi
