@@ -467,3 +467,4 @@ def main():
 
 if __name__=="__main__":
     main()
+# Trigger 2026-11-03 Ostrava market scan; no functional changes.
