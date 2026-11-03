@@ -113,8 +113,8 @@ def extract_street(text):
         return compact(m.group(1))
     return ""
 
-def page_text_for_link(link):
-    """Smallest container including link plus advertised price, not page footer."""
+def page_text_for_link(link, source=None):
+    """Find price within ONE listing card; never steal a neighbour's price."""
     text = compact(link.get_text(" ", strip=True))
     if price_from(text):
         return text[:1100]
@@ -123,10 +123,19 @@ def page_text_for_link(link):
         current = current.parent
         if current is None:
             break
+        # Stop before reaching a list/container with multiple advert links.
+        if source and sum(1 for node in current.select("a[href]")
+                          if re.search(source.pattern, urlsplit(
+                              urljoin("https://"+source_domain(source),
+                                      node.get("href",""))).path, re.I)) > 1:
+            break
         value = compact(current.get_text(" ", strip=True))
         if 50 <= len(value) <= 2200 and price_from(value):
             return value
     return text[:1100]
+
+def source_domain(source):
+    return urlsplit(source.sale).netloc
 
 def primary_text(link):
     text = compact(link.get_text(" ", strip=True))
@@ -165,7 +174,7 @@ def parse_cards(html, source, market, timestamp, page_url):
         if not re.search(source.pattern, urlsplit(href).path, re.I):
             continue
         title = primary_text(link)
-        block = page_text_for_link(link)
+        block = page_text_for_link(link, source)
         # Never infer a listing from a navigation link, advertisement or a
         # seller-provided generic long-form description.
         if not HOUSE.search(title) or not valid_region(block):
