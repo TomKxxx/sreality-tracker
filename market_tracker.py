@@ -246,7 +246,13 @@ def archive_photo(row, market):
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / (row["source_id"] + ".jpg")
     if path.exists() and path.stat().st_size > 1000:
-        return str(path.relative_to(ROOT)).replace("\\", "/")
+        try:
+            from PIL import Image
+            with Image.open(path) as check:
+                check.verify()
+            return str(path.relative_to(ROOT)).replace("\\", "/")
+        except Exception:
+            path.unlink(missing_ok=True)
     try:
         from io import BytesIO
         from PIL import Image, ImageOps
@@ -300,7 +306,10 @@ def update(market, incoming, timestamp, day):
         entry["last_seen"] = timestamp
         if not row["image_url"] and entry.get("image_url"):
             row["image_url"] = entry["image_url"]
-        row["photo_path"] = entry.get("photo_path","") or archive_photo(row, market)
+        previous_photo = entry.get("photo_path", "")
+        if previous_photo and not (ROOT / previous_photo).is_file():
+            previous_photo = ""
+        row["photo_path"] = previous_photo or archive_photo(row, market)
         for field in ("name","locality","url","image_url","photo_path","usable_m2","plot_m2","lat","lon"):
             if row.get(field) not in (None,""):
                 entry[field] = row[field]
