@@ -140,7 +140,7 @@ def get_id(source, url):
     if source.key == "idnes":
         match = re.search(r"/([a-zA-Z0-9]{18,})/?$", parsed.path)
     elif source.key == "remax":
-        match = re.search(r"/([a-zA-Z0-9-]{6,})/?$", parsed.path)
+        match = re.search(r"/reality/detail/(\d+)/", parsed.path)
     else:
         match = re.search(r"/(\d{5,})(?:/|$|[-.])", parsed.path)
         if not match:
