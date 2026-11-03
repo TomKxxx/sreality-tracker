@@ -58,6 +58,10 @@ SOURCES = (
            "https://www.ceskereality.cz/prodej/rodinne-domy/ostrava-mesto/",
            "https://www.ceskereality.cz/pronajem/rodinne-domy/ostrava-mesto/",
            r"/(?:prodej|pronajem)/rodinne-domy/[^?#]+-\d+\.html$", 1),
+    Source("trimex", "TRIMEX Reality (local agency)",
+           "https://www.trimexreality.cz/reality/domy-a-vily",
+           "https://www.trimexreality.cz/reality/domy-a-vily",
+           r"/detail/\d+/", 1),
     Source("bazos", "Bazoš (classifieds)",
            "https://reality.bazos.cz/prodam/dum/?hledat=Ostrava&hlokalita=Ostrava&humkreis=15",
            "https://reality.bazos.cz/pronajmu/dum/?hledat=Ostrava&hlokalita=Ostrava&humkreis=15",
@@ -174,8 +178,8 @@ def parse_cards(html, source, market, timestamp, page_url):
         if price is None:
             continue
         # Rent and purchase must never be mixed, including REMAX pages.
-        if source.key == "remax":
-            t = normalize(block[:90])
+        if source.key in ("remax", "trimex"):
+            t = normalize(block[:150])
             if market == "rent" and "pronajem" not in t:
                 continue
             if market == "sale" and "prodej" not in t:
