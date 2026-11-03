@@ -269,7 +269,9 @@ def archive_photo(row, market):
     from PIL import Image, ImageOps, UnidentifiedImageError
     folder = ROOT / "assets" / "photos" / market
     folder.mkdir(parents=True, exist_ok=True)
-    path = folder / (str(row["source_id"]) + ".jpg")
+    listing_source = str(row.get("id", "sreality:")).split(":")[0]
+    basename = str(row["source_id"]) if listing_source == "sreality" else listing_source + "-" + str(row["source_id"])
+    path = folder / (basename + ".jpg")
     if path.exists() and path.stat().st_size > 1000:
         try:
             with Image.open(path) as check:
@@ -286,7 +288,7 @@ def archive_photo(row, market):
         try:
             response = SESSION.get(
                 candidate, timeout=12,
-                headers={"Referer": "https://www.sreality.cz/",
+                headers={"Referer": row.get("url") or "https://www.sreality.cz/",
                          "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36",
                          "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8"},
             )
