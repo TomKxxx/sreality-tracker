@@ -121,16 +121,21 @@ function showMetric(kind){
 function changedSet(d,kind){return new Set((d&&d.changes||[]).filter(function(x){return x.kind===kind}).map(function(x){return x.id}))}
 function coverFor(p){
  var u=p.image_url||"",saved=p.photo_path||"";
- if(!/(?:\\/makleri\\/|\\/makler[_-]|\\/agent[s]?\\/|portrait|headshot)/i.test(u))return saved||u;
- // Even if an old agent portrait is cached, reuse a verified local photo
- // only when the advert price, area and two distinctive location words agree.
+ var urlText=u.toLowerCase();
+ var hasAgentCover=urlText.includes("/makleri/")||urlText.includes("/makler_")||
+   urlText.includes("/agent/")||urlText.includes("/agents/")||
+   urlText.includes("portrait")||urlText.includes("headshot");
+ if(!hasAgentCover)return saved||u;
+ // Legacy agent headshots are never displayed as a property photo.
+ // A matching local property image needs identical price and comparable area,
+ // plus two distinctive overlapping neighbourhood/street URL words.
  var excluded=new Set(["ostrava","pronajem","prodej","detail","rodinny",
    "rodinnem","domu","dome","reality","parkovacich","vcetne","ulice",
    "stani","pozemek","sreality","nabidka"]);
  function words(v){
    try{
      var url=new URL(v),path=decodeURIComponent(url.pathname).normalize("NFD")
-       .replace(/[\\u0300-\\u036f]/g,"").toLowerCase();
+       .replace(/[\u0300-\u036f]/g,"").toLowerCase();
      return new Set((path.match(/[a-z]{5,}/g)||[])
        .filter(function(t){return !excluded.has(t)}));
    }catch(e){return new Set()}
