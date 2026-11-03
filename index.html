@@ -119,6 +119,32 @@ function showMetric(kind){
  document.querySelector(".workspace").scrollIntoView({behavior:"smooth",block:"start"});
 }
 function changedSet(d,kind){return new Set((d&&d.changes||[]).filter(function(x){return x.kind===kind}).map(function(x){return x.id}))}
+function coverFor(p){
+ var u=p.image_url||"",saved=p.photo_path||"";
+ if(!/(?:\\/makleri\\/|\\/makler[_-]|\\/agent[s]?\\/|portrait|headshot)/i.test(u))return saved||u;
+ // Even if an old agent portrait is cached, reuse a verified local photo
+ // only when the advert price, area and two distinctive location words agree.
+ var excluded=new Set(["ostrava","pronajem","prodej","detail","rodinny",
+   "rodinnem","domu","dome","reality","parkovacich","vcetne","ulice",
+   "stani","pozemek","sreality","nabidka"]);
+ function words(v){
+   try{
+     var url=new URL(v),path=decodeURIComponent(url.pathname).normalize("NFD")
+       .replace(/[\\u0300-\\u036f]/g,"").toLowerCase();
+     return new Set((path.match(/[a-z]{5,}/g)||[])
+       .filter(function(t){return !excluded.has(t)}));
+   }catch(e){return new Set()}
+ }
+ var own=words(p.url),all=Object.values(records[market]&&records[market].properties||{});
+ var match=all.find(function(q){
+   if(q.id===p.id||q.source!=="sreality.cz"||!q.photo_path)return false;
+   if(Number(q.price)!==Number(p.price))return false;
+   if(!q.usable_m2||!p.usable_m2||Math.abs(q.usable_m2-p.usable_m2)>2)return false;
+   var common=0;words(q.url).forEach(function(w){if(own.has(w))common++});
+   return common>=2;
+ });
+ return match?match.photo_path:"";
+}
 function hist(p){return p.events||[]}
 function cut(p){var a=hist(p);return a.length?Math.max(0,Number(a[0].price)-p.price):0}
 function renderSources(){
@@ -155,7 +181,7 @@ var sort=byId("sort").value;all.sort(function(a,b){if(sort==="price-asc")return 
 byId("matches").textContent=all.length.toLocaleString("en-GB");byId("more").hidden=all.length<=limit;
 if(!all.length){container.append(el("div","empty","No properties match these filters."));return}
 all.slice(0,limit).forEach(function(p){
-var card=el("article","card"),photo=el("div","photo"),im=p.photo_path||p.image_url;
+var card=el("article","card"),photo=el("div","photo"),im=coverFor(p);
 if(im&&/^https:\/\//.test(im)||im&&/^assets\/photos\//.test(im)){var img=el("img");img.loading="lazy";img.alt="Photo of "+(p.locality||"house");img.src=im;img.onerror=function(){img.replaceWith(el("span","","Photo unavailable"))};photo.append(img)}else photo.textContent="PHOTO NOT AVAILABLE";
 var t=flags.reduced.has(p.id)?"↓ PRICE REDUCED":flags.new.has(p.id)?"NEW LISTING":p.status==="absent_unverified"?"NOT ADVERTISED":"";
 if(t){var b=el("span","tag"+(t==="NEW LISTING"?" new":t==="NOT ADVERTISED"?" absent":""),t);photo.append(b)}
@@ -164,7 +190,7 @@ body.append(el("span","source-chip",p.source||"Sreality"));body.append(el("h4","
 var facts=el("div","facts");facts.append(el("span","",(p.usable_m2||"?")+" m² house"));facts.append(el("span","",(p.plot_m2||"?")+" m² plot"));body.append(facts);
 var foot=el("div","cardfooter");foot.append(el("small","","First tracked "+date(p.first_seen)));var btn=el("button","","Price history ↗");btn.addEventListener("click",function(){details(p)});foot.append(btn);body.append(foot);card.append(body);container.append(card)
 })}
-function details(p){var root=byId("detail-content");root.textContent="";var im=p.photo_path||p.image_url;if(im){var img=el("img","modal-photo");img.alt="Listing photo";img.src=im;root.append(img)}
+function details(p){var root=byId("detail-content");root.textContent="";var im=coverFor(p);if(im){var img=el("img","modal-photo");img.alt="Listing photo";img.src=im;root.append(img)}
 root.append(el("p","kicker","PROPERTY PRICE HISTORY · "+p.id));root.append(el("h2","",p.name));root.append(el("p","",p.locality+" · "+fmt(p.price)+(market==="rent"?"/month":"")));
 if(p.url&&/^https:\/\//.test(p.url)){var a=el("a","outlink","Open original advert ↗");a.href=p.url;a.target="_blank";a.rel="noopener noreferrer";root.append(a)}
 root.append(el("p","notice","Status: "+p.status+". "+(p.radius_unverified?"This source does not independently verify the 15 km radius. ":"")+"An absent advert is NOT a proven sale or rental. Legacy events may have unverified coordinates."));
