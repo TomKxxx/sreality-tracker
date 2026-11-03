@@ -281,7 +281,7 @@ def fetch_extra(market, timestamp, session=None, pause=0.8):
                     status.update(state="access_denied", note=f"HTTP {response.status_code}")
                     break
                 response.raise_for_status()
-                parsed = parse_cards(response.text, source, market, timestamp, link)
+                parsed = parse_cards(response.text, source, market, timestamp, response.url)
                 if not parsed:
                     if page == 1:
                         status.update(state="no_verified_cards",
