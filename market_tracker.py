@@ -17,6 +17,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 from urllib.parse import urljoin
 import requests
+from extra_sources import fetch_extra, dedupe_incoming
 
 ROOT = Path(__file__).resolve().parent
 DATA = ROOT / "data"
@@ -328,7 +329,7 @@ def archive_photo(row, market):
               "- skipping further downloads from this host")
     return ""
 
-def update(market, incoming, timestamp, day):
+def update(market, incoming, timestamp, day, source_status=None):
     folder = DATA / market
     history = read_json(folder / "history.json", {})
     old_current = read_json(folder / "current.json", {})
@@ -340,7 +341,7 @@ def update(market, incoming, timestamp, day):
     for ident, row in incoming.items():
         entry = history.get(ident)
         if entry is None:
-            legacy = legacy_events(row["source_id"]) if market=="sale" else []
+            legacy = legacy_events(row["source_id"]) if market=="sale" and row.get("source")=="sreality.cz" else []
             events = legacy or []
             entry = {"id": ident, "market": market, "first_seen": events[0]["at"] if events else timestamp,
                      "last_seen": timestamp, "status":"active", "events": events,
@@ -369,7 +370,7 @@ def update(market, incoming, timestamp, day):
         if previous_photo and not (ROOT / previous_photo).is_file():
             previous_photo = ""
         row["photo_path"] = previous_photo or archive_photo(row, market)
-        for field in ("name","locality","url","image_url","photo_path","usable_m2","plot_m2","lat","lon"):
+        for field in ("source","name","locality","street","url","image_url","photo_path","usable_m2","plot_m2","lat","lon","sources","radius_unverified","coverage"):
             if row.get(field) not in (None,""):
                 entry[field] = row[field]
         history[ident] = entry
@@ -391,6 +392,18 @@ def update(market, incoming, timestamp, day):
     for ident, entry in history.items():
         if ident in new_ids or entry.get("status") == "historic_unverified":
             continue
+        if entry.get("source", "sreality.cz") != "sreality.cz":
+            # Partial portal scans cannot prove withdrawal or completion.
+            # After 8 unseen days, keep history but exclude stale entries
+            # from live inventory metrics.
+            try:
+                age = (datetime.fromisoformat(timestamp) -
+                       datetime.fromisoformat(entry["last_seen"])).days
+            except (KeyError, TypeError, ValueError):
+                age = 0
+            if age >= 8:
+                entry["status"] = "stale_unverified"
+            continue
         was_active = entry.get("status") == "active"
         entry["missing_scans"] = entry.get("missing_scans",0) + 1
         entry["status"] = "absent_unverified"
@@ -405,13 +418,14 @@ def update(market, incoming, timestamp, day):
     # These do NOT count towards active inventory or verified completed sales.
     dashboard_records = dict(incoming)
     for ident, entry in history.items():
-        if ident in dashboard_records or entry.get("status") != "absent_unverified":
+        if ident in dashboard_records or entry.get("status") not in ("absent_unverified", "stale_unverified"):
             continue
         events = entry.get("events") or []
         if not events:
             continue
         dashboard_records[ident] = {
-            "id": ident, "source_id": ident.split(":")[-1], "source": "sreality.cz",
+            "id": ident, "source_id": ident.split(":")[-1], "source": entry.get("source", "sreality.cz"),
+            "sources": entry.get("sources", []), "street": entry.get("street", ""),
             "market": market, "name": entry.get("name", "Historic house"),
             "locality": entry.get("locality", "Unknown locality"),
             "price": events[-1].get("price"), "usable_m2": entry.get("usable_m2"),
@@ -419,11 +433,15 @@ def update(market, incoming, timestamp, day):
             "image_url": entry.get("image_url", ""),
             "photo_path": entry.get("photo_path", ""), "events": events,
             "first_seen": entry.get("first_seen"), "observed_at": entry.get("last_seen"),
-            "status": "absent_unverified"
+            "status": entry["status"]
         }
     payload = {"date":day,"observed_at":timestamp,"market":market,"source":"sreality.cz",
                "scope":"Ostrava + 15 km advertised search; some listings without GPS not independently radius-verified",
                "counts":counts,"inventory":len(incoming),
+               "source_status":source_status or {},
+               "sources_scanned":1+sum(1 for x in (source_status or {}).values() if x.get("state")=="partial_ok"),
+               "source_listing_count":{"sreality":sum(r.get("source")=="sreality.cz" for r in incoming.values()),
+                    **{k:v.get("results",0) for k,v in (source_status or {}).items()}},
                "large_houses":sum((v.get("usable_m2") or 0)>=150 for v in incoming.values()),
                "over_10m":sum(v["price"]>=10_000_000 for v in incoming.values()) if market=="sale" else None,
                "changes":changes,"status":"ok"}
@@ -536,8 +554,21 @@ def main():
                     raise RuntimeError("Empty test fixture")
             else:
                 incoming,pages=fetch_market(market,timestamp)
-                print(market,"pages fetched:",pages)
-            report=update(market,incoming,timestamp,day)
+                print(market,"Sreality pages fetched:",pages)
+            source_status = {}
+            if fixture is None and os.environ.get("EXTRA_SOURCES", "1") == "1":
+                try:
+                    extra, source_status = fetch_extra(market,timestamp)
+                    raw_count = len(incoming) + len(extra)
+                    incoming = dedupe_incoming({**incoming, **extra})
+                    print(market, "extra sources:", json.dumps(source_status,
+                          ensure_ascii=False), "raw:", raw_count,
+                          "unique:", len(incoming))
+                except Exception as extra_error:
+                    # The primary scan and history must survive secondary issues.
+                    source_status = {"extra": {"state":"failed", "note":str(extra_error)[:200]}}
+                    print(market, "extra discovery unavailable:", repr(extra_error))
+            report=update(market,incoming,timestamp,day,source_status=source_status)
             print(market,json.dumps({"counts":report["counts"],"inventory":report["inventory"]}))
         except Exception as exc:
             failures.append(market)
