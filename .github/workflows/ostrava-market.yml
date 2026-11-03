@@ -49,6 +49,30 @@ jobs:
       - name: Run automated tests
         if: steps.timecheck.outputs.scan == 'true'
         run: python -m unittest discover -s tests -v
+      - name: Diagnose photo CDN responses
+        if: steps.timecheck.outputs.scan == 'true'
+        shell: bash
+        run: |
+          python - <<'PY'
+          import requests
+          from urllib.parse import urlsplit
+          import json
+          records=json.load(open("data/sale/current.json",encoding="utf-8"))
+          img=next((r.get("image_url") for r in records.values() if r.get("image_url")),None)
+          if not img:
+              print("No sample photo URL stored");raise SystemExit(0)
+          variants=[("original",img),("resized",img.split("?")[0]+"?fl=res,400,300,3|shr,,20|jpg,90")]
+          for label,url in variants:
+              for referer in ("", "https://www.sreality.cz/"):
+                  try:
+                      headers={"User-Agent":"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/131.0 Safari/537.36"}
+                      if referer: headers["Referer"]=referer
+                      r=requests.get(url,headers=headers,timeout=12,stream=True)
+                      print("photo probe",label,"referer",bool(referer),"HTTP",r.status_code,"type",r.headers.get("Content-Type"),"host",urlsplit(url).hostname,"length",r.headers.get("Content-Length"))
+                      r.close()
+                  except requests.RequestException as e:
+                      print("photo probe",label,type(e).__name__,str(e)[:150])
+          PY
       - name: Scan both markets (sale and rent)
         if: steps.timecheck.outputs.scan == 'true'
         env:
