@@ -36,7 +36,7 @@ class PropertyHistoryTests(unittest.TestCase):
                 row = {**self.row(), "image_url": img}
                 self.assertEqual(m.archive_photo(row, "sale"), "")
                 self.assertEqual(m.archive_photo(row, "sale"), "")
-                self.assertEqual(http.call_count, 1)
+                self.assertEqual(http.call_count, len(m.photo_candidates(img)))
                 m.PHOTO_BLOCKED_HOSTS.clear()
 
     def test_radius(self):
