@@ -28,6 +28,14 @@ nav.tabs{display:flex;border-bottom:1px solid #d9e4dd;gap:6px;margin-top:27px}
 .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:22px 0}
 .metric{background:#fff;border:1px solid var(--line);border-radius:10px;padding:19px 21px;box-shadow:0 8px 23px #0e40300a}
 .metric span{font-size:11px;color:var(--muted);display:block}.metric strong{display:block;font-size:37px;letter-spacing:-1.3px;margin:4px 0}.metric small{color:#8da09a;font-size:10px}
+.metric-action{display:block;width:100%;text-align:left;appearance:none;color:inherit;background:#fff;border:1px solid var(--line);border-radius:10px;padding:19px 21px;box-shadow:0 8px 23px #0e40300a;transition:border-color .15s,transform .15s,box-shadow .15s}
+.metric-action:hover,.metric-action:focus-visible{border-color:var(--green);box-shadow:0 10px 26px #0c745d22;transform:translateY(-2px);outline:none}
+.metric-action:focus-visible{outline:3px solid #99d8bd;outline-offset:2px}
+.metric-action[aria-pressed="true"]{border-color:var(--green);background:#f0faf4}
+.metric-action .metric-hint{display:block;color:var(--green);font-weight:700;margin-top:7px;font-size:11px}
+.metric-action span{font-size:11px;color:var(--muted);display:block}
+.metric-action strong{display:block;font-size:37px;letter-spacing:-1.3px;margin:4px 0}
+.metric-action small{color:#8da09a;font-size:10px}
 .notice{background:#edf5ee;border:1px solid #cee5d6;border-radius:7px;padding:13px 18px;color:#537365;font-size:12px;margin:22px 0 28px}
 .workspace{display:grid;grid-template-columns:255px minmax(0,1fr);gap:25px;align-items:start;margin-bottom:85px}
 aside{background:#fff;border:1px solid var(--line);border-radius:10px;padding:21px;position:sticky;top:15px}
@@ -67,7 +75,7 @@ dialog::backdrop{background:#031a19ad}dialog h2{font-size:26px;margin:8px 36px 1
 <main class="wrap">
 <nav class="tabs" role="tablist"><button type="button" class="active" data-market="sale">Houses for sale <span id="sale-count"></span></button><button type="button" data-market="rent">Houses for rent <span id="rent-count"></span></button></nav>
 <div class="section-header"><div><p class="kicker" style="color:#0c745d">Daily market overview</p><h2 id="section-title">For sale: the full picture</h2><p id="subtitle">New listings, advertised prices and changes over time.</p></div><a class="outlink" id="report-link" href="reports/sale/latest.html">View full daily report ↗</a></div>
-<div class="metrics"><article class="metric"><span>Currently advertised</span><strong id="m-inventory">—</strong><small>Tracked listings</small></article><article class="metric"><span>New this scan</span><strong id="m-new">—</strong><small>Not in prior history</small></article><article class="metric"><span>Price reductions</span><strong id="m-reduced">—</strong><small>Compared with previous observation</small></article><article class="metric"><span>Newly absent</span><strong id="m-absent">—</strong><small>Not proven sold or rented</small></article></div>
+<div class="metrics"><button type="button" class="metric-action" data-metric="inventory" aria-pressed="false"><span>Currently advertised</span><strong id="m-inventory">—</strong><small>Tracked listings</small><span class="metric-hint">View properties ↗</span></button><button type="button" class="metric-action" data-metric="new" aria-pressed="false"><span>New this scan</span><strong id="m-new">—</strong><small>Not in prior history</small><span class="metric-hint">View new listings ↗</span></button><button type="button" class="metric-action" data-metric="reduced" aria-pressed="false"><span>Price reductions</span><strong id="m-reduced">—</strong><small>Compared with previous observation</small><span class="metric-hint">View reductions ↗</span></button><button type="button" class="metric-action" data-metric="absent" aria-pressed="false"><span>Newly absent</span><strong id="m-absent">—</strong><small>Not proven sold or rented</small><span class="metric-hint">View withdrawn listings ↗</span></button></div>
 <div class="notice"><b>How to interpret these data:</b> All figures are asking prices. A removed advert is not evidence of a completed sale or tenancy. Some properties lack exact coordinates, so their radius is unverified. Historical snapshots include legacy data outside the search area; they are not used to calculate current inventory.</div>
 <div class="workspace"><aside><h3>Refine results</h3><label for="search">Search by locality or ID</label><input id="search" placeholder="Stará Bělá, Krmelín, ID…" type="search">
 <label for="status">Status</label><select id="status"><option value="active">Currently advertised</option><option value="all">All tracked</option><option value="absent">No longer advertised</option></select>
@@ -88,11 +96,25 @@ function el(tag,className,content){var e=document.createElement(tag);if(classNam
 function date(s){if(!s)return "Unknown";var d=new Date(String(s).replace(" ","T"));return isNaN(d.getTime())?String(s).slice(0,10):d.toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"})}
 function summary(){var d=records[market],c=d&&d.counts||{};byId("m-inventory").textContent=d?d.inventory:"—";["new","reduced","absent"].forEach(function(k){byId("m-"+k).textContent=d?c[k]||0:"—"});byId("updated").textContent=d?"Last scan "+date(d.observed_at):"Awaiting first verified cloud scan"}
 function setMarket(m){market=m;limit=24;document.querySelectorAll(".tabs button").forEach(function(b){b.classList.toggle("active",b.dataset.market===m)});byId("section-title").textContent=m==="sale"?"For sale: the full picture":"For rent: the full picture";byId("subtitle").textContent=m==="sale"?"Monitor asking prices, reductions and withdrawals.":"Monitor monthly rents, reductions and rental availability.";byId("report-link").href="reports/"+m+"/latest.html";byId("price-label").textContent=m==="sale"?"Minimum asking price":"Minimum monthly rent";byId("minprice").innerHTML=m==="sale"?'<option value="0">Any price</option><option value="5000000">5m+</option><option value="8000000">8m+</option><option value="10000000">10m+</option><option value="12000000">12m+</option><option value="15000000">15m+</option>':'<option value="0">Any rent</option><option value="20000">20k+</option><option value="30000">30k+</option><option value="40000">40k+</option><option value="50000">50k+</option><option value="65000">65k+</option>';byId("status").value="active";byId("activity").value="all";render()}
+function showMetric(kind){
+ if(!records[market])return;
+ byId("search").value="";byId("minprice").value="0";byId("area").value="0";
+ byId("status").value=kind==="absent"?"all":"active";
+ byId("activity").value=kind==="inventory"?"all":kind;
+ byId("sort").value=kind==="reduced"?"cut":"recent";
+ limit=24;render();
+ document.querySelector(".workspace").scrollIntoView({behavior:"smooth",block:"start"});
+}
 function changedSet(d,kind){return new Set((d&&d.changes||[]).filter(function(x){return x.kind===kind}).map(function(x){return x.id}))}
 function hist(p){return p.events||[]}
 function cut(p){var a=hist(p);return a.length?Math.max(0,Number(a[0].price)-p.price):0}
 function render(){
-summary();["sale","rent"].forEach(function(m){byId(m+"-count").textContent=records[m]?" · "+records[m].inventory:""});
+summary();
+document.querySelectorAll("[data-metric]").forEach(function(b){
+ var k=b.dataset.metric,active=k==="inventory"?byId("status").value==="active"&&byId("activity").value==="all":byId("activity").value===k;
+ b.setAttribute("aria-pressed",String(active));
+});
+["sale","rent"].forEach(function(m){byId(m+"-count").textContent=records[m]?" · "+records[m].inventory:""});
 var latest=records[market],container=byId("cards");container.textContent="";
 if(!latest){container.append(el("div","empty","No verified published scan yet. The scheduled scanner will fill this section when its source is accessible."));byId("matches").textContent="0";byId("more").hidden=true;return}
 var all=Object.values(latest.properties||{}),flags={},k;["new","reduced","increased","absent"].forEach(function(x){flags[x]=changedSet(latest,x)});
@@ -116,6 +138,7 @@ if(p.url&&/^https:\/\//.test(p.url)){var a=el("a","outlink","Open original adver
 root.append(el("p","notice","Status: "+p.status+". An absent advert is NOT a proven sale or rental. Legacy events may have unverified coordinates."));
 var box=el("div","timeline");hist(p).slice().reverse().forEach(function(e){var row=el("div","event");row.append(el("small","",e.at||"Date unknown"));row.append(el("div","price",fmt(e.price)));row.append(el("small","",e.source==="legacy"?"Imported historical price · unverified location":"Observed asking price"));box.append(row)});if(!hist(p).length)box.append(el("p","","No recorded price changes"));root.append(box);byId("detail").showModal()}
 async function get(m){try{var r=await fetch("data/"+m+"/latest.json?t="+Date.now(),{cache:"no-store"});if(!r.ok)throw Error("No summary");var d=await r.json();var cur=await fetch("data/"+m+"/current.json?t="+Date.now(),{cache:"no-store"});if(!cur.ok)throw Error("No inventory");d.properties=await cur.json();records[m]=d}catch(e){console.warn(m,e)}}
+document.querySelectorAll(".metric-action").forEach(function(b){b.addEventListener("click",function(){showMetric(b.dataset.metric)})});
 document.querySelectorAll(".tabs button").forEach(function(b){b.addEventListener("click",function(){setMarket(b.dataset.market)})});
 ["search","status","activity","minprice","area","sort"].forEach(function(x){byId(x).addEventListener(x==="search"?"input":"change",function(){limit=24;render()})});
 byId("reset").addEventListener("click",function(){byId("search").value="";byId("status").value="active";byId("activity").value="all";byId("minprice").value="0";byId("area").value="0";render()});
