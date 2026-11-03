@@ -276,6 +276,11 @@ def archive_photo(row, market, *, force=False, reject_faces=False):
         try:
             with Image.open(path) as check:
                 check.verify()
+            if reject_faces:
+                from photo_quality import looks_like_portrait
+                if looks_like_portrait(path):
+                    print("Skipping cached portrait:", row["id"])
+                    return ""
             return str(path.relative_to(ROOT)).replace("\\", "/")
         except (OSError, UnidentifiedImageError):
             path.unlink(missing_ok=True)
