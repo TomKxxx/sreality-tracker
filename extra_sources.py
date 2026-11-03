@@ -137,6 +137,30 @@ def page_text_for_link(link, source=None):
 def source_domain(source):
     return urlsplit(source.sale).netloc
 
+def card_image(link, page_url, source):
+    """Use only a photograph inside this advert card, not nearby properties."""
+    current = link
+    for _ in range(4):
+        for img in current.select("img"):
+            candidate = img.get("data-src") or img.get("src")
+            if not candidate or candidate.startswith(("data:", "blob:")):
+                continue
+            address = urljoin(page_url, candidate)
+            if not address.startswith("https://"):
+                continue
+            filename = urlsplit(address).path.lower()
+            if any(x in filename for x in ("logo", "avatar", "icon", "sprite", "agent")):
+                continue
+            return address
+        current = current.parent
+        if current is None:
+            break
+        # Stop before examining an ancestor that mixes several adverts.
+        if sum(1 for node in current.select("a[href]")
+               if re.search(source.pattern, urlsplit(node.get("href","")).path, re.I)) > 1:
+            break
+    return ""
+
 def primary_text(link):
     text = compact(link.get_text(" ", strip=True))
     if text and len(text) > 12:
@@ -208,7 +232,7 @@ def parse_cards(html, source, market, timestamp, page_url):
             "locality": compact(title[-110:])[:110],
             "street": street, "price": price,
             "usable_m2": area, "plot_m2": plot,
-            "url": href, "image_url": "", "photo_path": "",
+            "url": href, "image_url": card_image(link, page_url, source), "photo_path": "",
             "lat": None, "lon": None, "distance_checked": False,
             "radius_unverified": True, "coverage": "partial_portal",
             "observed_at": timestamp,
