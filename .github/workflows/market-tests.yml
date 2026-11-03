@@ -3,6 +3,9 @@ on:
   pull_request:
     paths:
       - 'market_tracker.py'
+      - 'photo_quality.py'
+      - 'extra_sources.py'
+      - 'requirements-market.txt'
       - 'tests/**'
       - '.github/workflows/market-tests.yml'
       - 'index.html'
