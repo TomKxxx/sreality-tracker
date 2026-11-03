@@ -262,8 +262,22 @@ def strict_duplicate(left, right):
     if left.get("market") != right.get("market"):
         return False
     a, b = normalize(left.get("street")), normalize(right.get("street"))
-    if len(a) < 5 or len(b) < 5 or a != b:
-        return False
+    if len(a) >= 5 and len(b) >= 5 and a == b:
+        pass
+    else:
+        # Sreality search cards omit street, but an advert URL often ends
+        # with the street slug: .../ostrava-stara-bela-polni/123456.
+        def path_matches_street(item, street):
+            if not street or len(street) < 5:
+                return False
+            chunks = urlsplit(item.get("url") or "").path.rstrip("/").split("/")
+            if len(chunks) < 2:
+                return False
+            locality_slug = normalize(chunks[-2]).replace(" ", "-")
+            sought = street.replace(" ", "-")
+            return locality_slug == sought or locality_slug.endswith("-" + sought)
+        if not (path_matches_street(left, b) or path_matches_street(right, a)):
+            return False
     aa, bb = left.get("usable_m2"), right.get("usable_m2")
     pa, pb = left.get("plot_m2"), right.get("plot_m2")
     if not all(isinstance(v, (int,float)) and v > 0 for v in (aa,bb,pa,pb)):
