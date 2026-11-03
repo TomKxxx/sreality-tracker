@@ -336,6 +336,61 @@ def archive_photo(row, market, *, force=False, reject_faces=False):
               "- skipping further downloads from this host")
     return ""
 
+def choose_property_photo(row, market, previous_photo, incoming, old_current):
+    """Prefer an already archived house image; never keep a prominent face.
+
+    The high-confidence cross-source match is particularly useful for agency
+    advert cards which show the estate agent rather than the house.
+    """
+    import photo_quality as pq
+    previous_file = ROOT / previous_photo if previous_photo else None
+    existing = bool(previous_file and previous_file.is_file())
+    agent_url = pq.suspect_url(row.get("image_url", ""))
+    # Old files can have valid image headers but still be agent portraits.
+    if existing and not pq.looks_like_portrait(previous_file) and not (
+        agent_url and row["source_id"] in previous_photo):
+        return previous_photo
+    if existing:
+        print("Replacing suspect existing cover:", row["id"],
+              "agent_url=", agent_url)
+
+    # First try the card thumbnail, but validate before replacing old files.
+    if row.get("image_url") and not agent_url:
+        saved = archive_photo(row, market, force=existing, reject_faces=True)
+        if saved:
+            return saved
+
+    # Cross-source photos already live locally and do not require another HTTP
+    # request. Require same price, almost-identical area and matching street.
+    match = pq.archived_match(
+        row, list(incoming.values()) + list(old_current.values()), ROOT)
+    if match:
+        row["photo_source_listing"] = match["id"]
+        row["image_url"] = match.get("image_url", "")
+        print("Using matching property photo:", row["id"], "from", match["id"])
+        return match["photo_path"]
+
+    # If no matching property exists, inspect a small number of real advert
+    # galleries, respecting their robots.txt and rate limits.
+    if row.get("source") != "sreality.cz":
+        for image_url in pq.gallery_alternatives(row):
+            if image_url == row.get("image_url") or pq.suspect_url(image_url):
+                continue
+            alternative = dict(row)
+            alternative["image_url"] = image_url
+            saved = archive_photo(alternative, market, force=True,
+                                  reject_faces=True)
+            if saved:
+                row["image_url"] = image_url
+                print("Recovered house photo from advert:", row["id"])
+                return saved
+
+    # Never display a known portrait as the property cover. A neutral empty
+    # placeholder is more truthful than an estate agent's headshot.
+    row["image_url"] = ""
+    return ""
+
+
 def update(market, incoming, timestamp, day, source_status=None):
     folder = DATA / market
     history = read_json(folder / "history.json", {})
@@ -376,10 +431,14 @@ def update(market, incoming, timestamp, day, source_status=None):
         previous_photo = entry.get("photo_path", "")
         if previous_photo and not (ROOT / previous_photo).is_file():
             previous_photo = ""
-        row["photo_path"] = previous_photo or archive_photo(row, market)
-        for field in ("source","name","locality","street","url","image_url","photo_path","usable_m2","plot_m2","lat","lon","sources","radius_unverified","coverage"):
+        row["photo_path"] = choose_property_photo(
+            row, market, previous_photo, incoming, old_current)
+        for field in ("source","name","locality","street","url","image_url","photo_path","usable_m2","plot_m2","lat","lon","sources","radius_unverified","coverage","photo_source_listing"):
             if row.get(field) not in (None,""):
                 entry[field] = row[field]
+        # Clear rejected agent thumbnails from saved listing metadata as well.
+        entry["photo_path"] = row["photo_path"]
+        entry["image_url"] = row["image_url"]
         history[ident] = entry
     # Best-effort photo backfill for previously observed listings, including
     # withdrawn adverts. Never change their listing status or observation dates.
@@ -389,10 +448,17 @@ def update(market, incoming, timestamp, day, source_status=None):
                 continue
             old_path = entry.get("photo_path", "")
             if old_path and (ROOT / old_path).is_file():
+                from photo_quality import looks_like_portrait, suspect_url
+                if looks_like_portrait(ROOT / old_path) or (
+                        suspect_url(entry.get("image_url", "")) and
+                        str(ident.split(":")[-1]) in old_path):
+                    entry["photo_path"] = ""
+                    if suspect_url(entry.get("image_url", "")):
+                        entry["image_url"] = ""
                 continue
             candidate = {"id": ident, "source_id": ident.split(":")[-1],
                          "image_url": entry["image_url"]}
-            archived = archive_photo(candidate, market)
+            archived = archive_photo(candidate, market, reject_faces=True)
             if archived:
                 entry["photo_path"] = archived
     # Only mark missing when the source scan finished successfully.
@@ -582,6 +648,12 @@ def main():
             print(market,"scan failed, historical data unchanged:",repr(exc),file=sys.stderr)
             write_json(DATA/market/"errors"/(day+".json"),
                        {"date":day,"market":market,"status":"unverified","error":str(exc)})
+    # Persist image-quality results so each unchanged photo is analysed once.
+    try:
+        from photo_quality import save_quality_cache
+        save_quality_cache()
+    except Exception as exc:
+        print("Could not save optional image-quality cache:", repr(exc))
     if failures:
         sys.exit(1)
 
