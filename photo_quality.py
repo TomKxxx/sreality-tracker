@@ -7,6 +7,7 @@ two distinctive matching location/street URL tokens, and a locally stored file.
 from __future__ import annotations
 
 from functools import lru_cache
+import hashlib
 from pathlib import Path
 from urllib.parse import urljoin, urlsplit
 from urllib.robotparser import RobotFileParser
@@ -74,12 +75,45 @@ def dominant_face(path, size, mtime_ns):
         return False
 
 
+_cache_path = Path(__file__).resolve().parent / "data" / "photo_quality_cache.json"
+try:
+    _quality_cache = json.loads(_cache_path.read_text(encoding="utf-8"))
+    if not isinstance(_quality_cache, dict):
+        _quality_cache = {}
+except (FileNotFoundError, OSError, ValueError):
+    _quality_cache = {}
+_cache_dirty = False
+
+
 def looks_like_portrait(path):
+    """Review each unique image content once, persisting results across scans."""
+    global _cache_dirty
     candidate = Path(path)
     if not candidate.is_file():
         return False
+    try:
+        signature = hashlib.blake2b(candidate.read_bytes(), digest_size=16).hexdigest()
+    except OSError:
+        return False
+    if signature in _quality_cache:
+        return bool(_quality_cache[signature])
     stat = candidate.stat()
-    return dominant_face(str(candidate), stat.st_size, stat.st_mtime_ns)
+    result = dominant_face(str(candidate), stat.st_size, stat.st_mtime_ns)
+    _quality_cache[signature] = result
+    _cache_dirty = True
+    return result
+
+
+def save_quality_cache():
+    global _cache_dirty
+    if not _cache_dirty:
+        return
+    _cache_path.parent.mkdir(parents=True, exist_ok=True)
+    import os
+    tmp = _cache_path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(_quality_cache, separators=(",", ":")), encoding="utf-8")
+    os.replace(tmp, _cache_path)
+    _cache_dirty = False
 
 
 def tokens(record):
