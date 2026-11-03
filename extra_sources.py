@@ -37,7 +37,7 @@ SOURCES = (
     Source("idnes", "Reality iDNES",
            "https://reality.idnes.cz/s/prodej/domy/ostrava/",
            "https://reality.idnes.cz/s/pronajem/domy/ostrava/",
-           r"/detail/(?:prodej|pronajem)/(?:dum|vila)/", 4),
+           r"/detail/(?:prodej|pronajem)/(?:dum|vila)/", 8),
     Source("bezrealitky", "Bezrealitky",
            "https://www.bezrealitky.cz/vypis/nabidka-prodej/dum/okres-ostrava-mesto",
            "https://www.bezrealitky.cz/vypis/nabidka-pronajem/dum/okres-ostrava-mesto",
@@ -53,7 +53,7 @@ SOURCES = (
     Source("realitymix", "RealityMIX",
            "https://realitymix.cz/reality/domy/prodej/moravskoslezsky/ostrava-mesto",
            "https://realitymix.cz/reality/domy/pronajem/moravskoslezsky/ostrava-mesto",
-           r"/detail/[^?#]+-\d+\.html$", 1),
+           r"/detail/[^?#]+-\d+\.html$", 7),
     Source("ceskereality", "ČeskéReality",
            "https://www.ceskereality.cz/prodej/rodinne-domy/ostrava-mesto/",
            "https://www.ceskereality.cz/pronajem/rodinne-domy/ostrava-mesto/",
@@ -268,12 +268,17 @@ def fetch_extra(market, timestamp, session=None, pause=0.8):
             if not allowed_by_robots(client, url):
                 status.update(state="robots_disallowed", note="Not scanned")
                 continue
-            count = 0
+            seen = set()
             for page in range(1, source.max_pages + 1):
                 link = url
-                if source.key in ("idnes", "mmreality") and page > 1:
+                if page > 1:
                     sep = "&" if "?" in url else "?"
-                    link = url + sep + f"page={page}"
+                    if source.key == "idnes":
+                        link = url + sep + f"page={page-1}"
+                    elif source.key == "realitymix":
+                        link = url + sep + f"stranka={page}"
+                    elif source.key == "mmreality":
+                        link = url + sep + f"page={page}
                 if page > 1 and not allowed_by_robots(client, link):
                     break
                 response = client.get(link, headers=HEADERS, timeout=TIMEOUT)
@@ -287,13 +292,19 @@ def fetch_extra(market, timestamp, session=None, pause=0.8):
                         status.update(state="no_verified_cards",
                                       note="No parseable matching offers; not treated as zero inventory")
                     break
-                results.update(parsed)
-                count += len(parsed)
+                fresh = {k:v for k,v in parsed.items() if k not in seen}
+                if not fresh:
+                    break
+                results.update(fresh)
+                seen.update(fresh)
                 if page < source.max_pages:
                     time.sleep(pause)
-            if count:
-                status.update(state="partial_ok", results=count,
-                              note="Observed entries, not complete 15 km coverage")
+            if seen:
+                state = "partial_ok" if status["state"] == "unknown" else "partial_with_errors"
+                note = "Observed unique adverts, not complete 15 km coverage"
+                if status.get("note"):
+                    note += "; " + status["note"]
+                status.update(state=state, results=len(seen), note=note)
         except requests.RequestException as exc:
             status.update(state="network_error", note=str(exc)[:180])
         except Exception as exc:
