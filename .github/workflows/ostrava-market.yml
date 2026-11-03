@@ -6,6 +6,10 @@ on:
     branches: [main]
     paths:
       - 'market_tracker.py'
+      - 'extra_sources.py'
+      - 'requirements-market.txt'
+      - 'tests/**'
+      - 'index.html'
       - '.github/workflows/ostrava-market.yml'
   schedule:
     # Both BST and GMT candidates. Gate ensures only the 10:00 UK run proceeds.
@@ -76,6 +80,7 @@ jobs:
       - name: Scan both markets (sale and rent)
         if: steps.timecheck.outputs.scan == 'true'
         env:
+          EXTRA_SOURCES: '1'
           ARCHIVE_IMAGES: '1'
         run: python market_tracker.py --market both
       - name: Save daily snapshots and separate reports
