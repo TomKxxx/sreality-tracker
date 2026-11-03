@@ -314,6 +314,20 @@ def update(market, incoming, timestamp, day):
             if row.get(field) not in (None,""):
                 entry[field] = row[field]
         history[ident] = entry
+    # Best-effort photo backfill for previously observed listings, including
+    # withdrawn adverts. Never change their listing status or observation dates.
+    if os.environ.get("ARCHIVE_IMAGES", "0") == "1":
+        for ident, entry in history.items():
+            if ident in incoming or not entry.get("image_url"):
+                continue
+            old_path = entry.get("photo_path", "")
+            if old_path and (ROOT / old_path).is_file():
+                continue
+            candidate = {"id": ident, "source_id": ident.split(":")[-1],
+                         "image_url": entry["image_url"]}
+            archived = archive_photo(candidate, market)
+            if archived:
+                entry["photo_path"] = archived
     # Only mark missing when the source scan finished successfully.
     for ident, entry in history.items():
         if ident in new_ids or entry.get("status") == "historic_unverified":
