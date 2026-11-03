@@ -257,7 +257,7 @@ def photo_candidates(url):
     ]
     return list(dict.fromkeys(options))
 
-def archive_photo(row, market):
+def archive_photo(row, market, *, force=False, reject_faces=False):
     """Archive an actual validated image, never a CDN error page.
     Respect 403/429 blocks rather than repeatedly retrying a denied host.
     Photos remain owned by their respective copyright owners.
@@ -272,7 +272,7 @@ def archive_photo(row, market):
     listing_source = str(row.get("id", "sreality:")).split(":")[0]
     basename = str(row["source_id"]) if listing_source == "sreality" else listing_source + "-" + str(row["source_id"])
     path = folder / (basename + ".jpg")
-    if path.exists() and path.stat().st_size > 1000:
+    if not force and path.exists() and path.stat().st_size > 1000:
         try:
             with Image.open(path) as check:
                 check.verify()
@@ -319,6 +319,11 @@ def archive_photo(row, market):
                 temporary = path.with_suffix(".tmp")
                 try:
                     image.save(temporary, format="JPEG", quality=80, optimize=True)
+                    if reject_faces:
+                        from photo_quality import looks_like_portrait
+                        if looks_like_portrait(temporary):
+                            print("Rejected face-dominated photo:", row["id"])
+                            continue
                     temporary.replace(path)
                 finally:
                     temporary.unlink(missing_ok=True)
