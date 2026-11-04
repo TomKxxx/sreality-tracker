@@ -58,7 +58,8 @@ class PropertyHistoryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             with patch.object(m,"DATA",Path(folder)), patch.object(m,"ROOT",Path(folder)), patch.object(m,"legacy_events",return_value=[]), patch.object(m,"archive_photo",return_value=""):
                 a=m.update("sale",{"sreality:123":self.row()},"2026-11-02T10:00:00+01:00","2026-11-02")
-                self.assertEqual(a["counts"]["new"],1)
+                self.assertEqual(a["counts"]["new"],0)
+                self.assertEqual(a["counts"]["discovered"],1)
                 b=m.update("sale",{"sreality:123":self.row(11000000)},"2026-11-03T10:00:00+01:00","2026-11-03")
                 self.assertEqual(b["counts"]["reduced"],1)
                 self.assertEqual(b["changes"][0]["percent"],-8.33)
@@ -66,5 +67,77 @@ class PropertyHistoryTests(unittest.TestCase):
                 stored=m.read_json(Path(folder)/"sale"/"history.json",{})
                 self.assertEqual(stored["sreality:123"]["status"],"absent_unverified")
                 self.assertNotEqual(stored["sreality:123"]["status"],"sold")
+
+    def test_new_requires_previous_complete_scan(self):
+        with tempfile.TemporaryDirectory() as folder:
+            with patch.object(m, "DATA", Path(folder)), patch.object(m, "ROOT", Path(folder)), \
+                 patch.object(m, "legacy_events", return_value=[]), \
+                 patch.object(m, "archive_photo", return_value=""):
+                a = m.update("sale", {"sreality:123": self.row()},
+                             "2026-11-02T10:00:00+01:00", "2026-11-02")
+                self.assertEqual(a["counts"]["discovered"], 1)
+                second = {**self.row(), "id": "sreality:124", "source_id": "124",
+                          "url": "https://www.sreality.cz/detail/prodej/dum/rodinny/another-house/124"}
+                b = m.update("sale", {"sreality:123": self.row(), "sreality:124": second},
+                             "2026-11-03T10:00:00+01:00", "2026-11-03")
+                self.assertEqual(b["counts"]["new"], 1)
+                self.assertEqual(b["counts"]["discovered"], 0)
+                self.assertEqual(b["classification_version"], 2)
+
+    def test_secondary_new_to_crawler_not_new_to_market(self):
+        with tempfile.TemporaryDirectory() as folder:
+            with patch.object(m, "DATA", Path(folder)), patch.object(m, "ROOT", Path(folder)), \
+                 patch.object(m, "legacy_events", return_value=[]), \
+                 patch.object(m, "archive_photo", return_value=""):
+                m.update("sale", {"sreality:123": self.row()},
+                         "2026-11-02T10:00:00+01:00", "2026-11-02")
+                extra = {**self.row(), "id": "idnes:abc", "source_id": "abc",
+                         "source": "Reality iDNES",
+                         "url": "https://reality.idnes.cz/detail/prodej/dum/abc/"}
+                b = m.update("sale", {"sreality:123": self.row(), "idnes:abc": extra},
+                             "2026-11-03T10:00:00+01:00", "2026-11-03")
+                self.assertEqual(b["counts"]["new"], 0)
+                self.assertEqual(b["counts"]["discovered"], 1)
+                self.assertEqual(b["changes"][0]["kind"], "discovered")
+
+    def test_legacy_sreality_listing_is_not_new(self):
+        with tempfile.TemporaryDirectory() as folder:
+            legacy = [{"at": "2026-05-10", "price": 12000000, "source": "legacy"}]
+            with patch.object(m, "DATA", Path(folder)), patch.object(m, "ROOT", Path(folder)), \
+                 patch.object(m, "legacy_events", return_value=legacy), \
+                 patch.object(m, "archive_photo", return_value=""):
+                a = m.update("sale", {"sreality:123": self.row()},
+                             "2026-11-02T10:00:00+01:00", "2026-11-02")
+                self.assertEqual(a["counts"]["historical_return"], 1)
+                self.assertEqual(a["counts"]["new"], 0)
+
+    def test_previous_crosslist_alias_prevents_false_new(self):
+        prior = {"sreality:old": {
+            "id": "sreality:old", "market": "sale",
+            "url": "https://www.sreality.cz/detail/prodej/dum/rodinny/x/old",
+            "sources": [{"id": "idnes:abc",
+                         "url": "https://reality.idnes.cz/detail/prodej/dum/abc/"}]
+        }}
+        aliases = m.prior_listing_aliases(prior)
+        self.assertEqual(aliases["id:idnes:abc"], "sreality:old")
+        self.assertEqual(
+            aliases["url:reality.idnes.cz/detail/prodej/dum/abc"],
+            "sreality:old")
+
+    def test_second_same_day_scan_preserves_prior_snapshot(self):
+        with tempfile.TemporaryDirectory() as folder:
+            with patch.object(m, "DATA", Path(folder)), patch.object(m, "ROOT", Path(folder)), \
+                 patch.object(m, "legacy_events", return_value=[]), \
+                 patch.object(m, "archive_photo", return_value=""):
+                m.update("sale", {"sreality:123": self.row()},
+                         "2026-11-02T10:00:00+01:00", "2026-11-02")
+                m.update("sale", {"sreality:123": self.row()},
+                         "2026-11-02T11:00:00+01:00", "2026-11-02")
+                snapshots = list((Path(folder) / "sale" / "snapshots").glob("*.json"))
+                self.assertEqual(len(snapshots), 2)
+                prior = m.read_json(Path(folder) / "sale" / "snapshots" /
+                                    "2026-11-02_2026-11-02T10-00-00_01-00.json", {})
+                self.assertEqual(prior["observed_at"], "2026-11-02T10:00:00+01:00")
+
 if __name__=="__main__":
     unittest.main()
