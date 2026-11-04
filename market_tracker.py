@@ -490,8 +490,9 @@ def update(market, incoming, timestamp, day, source_status=None):
                 # unambiguous street, municipality, usable area AND plot match.
                 candidates = [old_id for old_id, old in history.items()
                               if old_id != ident and old.get("market") == market
-                              and old.get("usable_m2") and old.get("plot_m2")
-                              and row.get("usable_m2") and row.get("plot_m2")
+                              and all(isinstance(v, (int, float)) and v > 0 for v in
+                                      (old.get("usable_m2"), old.get("plot_m2"),
+                                       row.get("usable_m2"), row.get("plot_m2")))
                               and abs(old["usable_m2"] - row["usable_m2"]) <= max(3, .025 * row["usable_m2"])
                               and abs(old["plot_m2"] - row["plot_m2"]) <= max(8, .035 * row["plot_m2"])
                               and strict_duplicate(old, row)]
