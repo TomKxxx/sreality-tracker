@@ -280,7 +280,7 @@ def fetch_extra(market, timestamp, session=None, pause=0.8):
                     elif source.key == "realitymix":
                         link = url + sep + f"stranka={page}"
                     elif source.key == "mmreality":
-                        link = url + sep + f"page={page}
+                        link = url + sep + f"page={page}"
                 if page > 1 and not allowed_by_robots(client, link):
                     break
                 response = client.get(link, headers=HEADERS, timeout=TIMEOUT)
