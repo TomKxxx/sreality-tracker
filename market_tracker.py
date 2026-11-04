@@ -473,7 +473,8 @@ def update(market, incoming, timestamp, day, source_status=None):
         entry = history.get(ident)
         if entry is None:
             legacy = legacy_events(row["source_id"]) if market=="sale" and row.get("source")=="sreality.cz" else []
-            events = legacy or []
+            events = list(legacy or [])
+            had_prior_evidence = bool(events)
             entry = {"id": ident, "market": market, "first_seen": events[0]["at"] if events else timestamp,
                      "last_seen": timestamp, "status":"active", "events": events,
                      "missing_scans": 0}
@@ -501,7 +502,7 @@ def update(market, incoming, timestamp, day, source_status=None):
             if linked and linked != ident:
                 entry["related_listing_id"] = linked
             # Historic Sreality IDs or cross-listed adverts are not new homes.
-            if events or linked:
+            if had_prior_evidence or linked:
                 kind = "historical_return"
             elif row.get("source") == "sreality.cz" and has_primary_baseline:
                 kind = "new"  # First seen on consecutive *complete* Sreality scans.
