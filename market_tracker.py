@@ -17,7 +17,7 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from urllib.parse import urljoin, urlsplit
 import requests
-from extra_sources import fetch_extra, dedupe_incoming
+from extra_sources import fetch_extra, dedupe_incoming, strict_duplicate
 
 ROOT = Path(__file__).resolve().parent
 DATA = ROOT / "data"
@@ -485,6 +485,18 @@ def update(market, incoming, timestamp, day, source_status=None):
                 linked = next((aliases.get("id:" + str(source.get("id")))
                                for source in row.get("sources", [])
                                if aliases.get("id:" + str(source.get("id")))), None)
+            if not linked:
+                # A relisted advert may receive a different portal ID. Require
+                # unambiguous street, municipality, usable area AND plot match.
+                candidates = [old_id for old_id, old in history.items()
+                              if old_id != ident and old.get("market") == market
+                              and old.get("usable_m2") and old.get("plot_m2")
+                              and row.get("usable_m2") and row.get("plot_m2")
+                              and abs(old["usable_m2"] - row["usable_m2"]) <= max(3, .025 * row["usable_m2"])
+                              and abs(old["plot_m2"] - row["plot_m2"]) <= max(8, .035 * row["plot_m2"])
+                              and strict_duplicate(old, row)]
+                if len(candidates) == 1:
+                    linked = candidates[0]
             if linked and linked != ident:
                 entry["related_listing_id"] = linked
             # Historic Sreality IDs or cross-listed adverts are not new homes.
@@ -683,7 +695,7 @@ def generate_report(market, payload, current, history):
 header{background:linear-gradient(130deg,#072c2b,#195548);padding:50px max(20px,calc((100vw - 980px)/2));color:#fff}
 header a{color:#a9e2cb}h1{font-size:clamp(33px,5vw,50px);margin:18px 0 8px}
 header p{color:#bbd8cb}.wrap{max-width:1000px;margin:30px auto;padding:0 20px}
-.metrics{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}.metric{background:white;padding:19px;border:1px solid #dae5dc;border-radius:9px}
+.metrics{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}.metric{background:white;padding:19px;border:1px solid #dae5dc;border-radius:9px}
 .metric small{color:#69877a;display:block}.metric strong{font-size:33px;display:block}
 .notice{background:#e9f4ed;padding:14px 18px;border-left:4px solid #269171;margin:24px 0}
 .item{display:flex;background:white;border:1px solid #e0eae2;border-radius:10px;overflow:hidden;gap:18px;margin:12px 0;align-items:center}
