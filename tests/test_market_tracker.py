@@ -76,7 +76,8 @@ class PropertyHistoryTests(unittest.TestCase):
                 a = m.update("sale", {"sreality:123": self.row()},
                              "2026-11-02T10:00:00+01:00", "2026-11-02")
                 self.assertEqual(a["counts"]["discovered"], 1)
-                second = {**self.row(), "id": "sreality:124", "source_id": "124",\n                          "url": "https://www.sreality.cz/detail/prodej/dum/rodinny/another-house/124"}
+                second = {**self.row(), "id": "sreality:124", "source_id": "124",
+                          "url": "https://www.sreality.cz/detail/prodej/dum/rodinny/another-house/124"}
                 b = m.update("sale", {"sreality:123": self.row(), "sreality:124": second},
                              "2026-11-03T10:00:00+01:00", "2026-11-03")
                 self.assertEqual(b["counts"]["new"], 1)
