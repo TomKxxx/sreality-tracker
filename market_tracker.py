@@ -13,9 +13,9 @@ from pathlib import Path
 import re
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit
 import requests
 from extra_sources import fetch_extra, dedupe_incoming
 
@@ -397,6 +397,65 @@ def choose_property_photo(row, market, previous_photo, incoming, old_current):
     return ""
 
 
+def canonical_listing_url(value):
+    """Stable URL key: ignore query strings, fragments and trailing slashes."""
+    if not value:
+        return ""
+    parsed = urlsplit(value)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        return ""
+    return parsed.netloc.lower().removeprefix("www.") + parsed.path.rstrip("/").lower()
+
+
+def prior_listing_aliases(history):
+    """Include cross-source IDs/URLs retained on older deduplicated adverts."""
+    aliases = {}
+    for original_id, entry in history.items():
+        aliases.setdefault("id:" + original_id, original_id)
+        key = canonical_listing_url(entry.get("url"))
+        if key:
+            aliases.setdefault("url:" + key, original_id)
+        for linked in entry.get("sources") or []:
+            if linked.get("id"):
+                aliases.setdefault("id:" + str(linked["id"]), original_id)
+            key = canonical_listing_url(linked.get("url"))
+            if key:
+                aliases.setdefault("url:" + key, original_id)
+    return aliases
+
+
+def comparable_primary_baseline(previous, timestamp):
+    """A complete Sreality scan within 72h is a comparable observation.
+    Even this proves first observed, not the property's publication date.
+    """
+    if previous.get("status") != "ok":
+        return False
+    try:
+        delta = datetime.fromisoformat(timestamp) - datetime.fromisoformat(previous["observed_at"])
+        return timedelta(0) <= delta <= timedelta(hours=72)
+    except (KeyError, TypeError, ValueError):
+        return False
+
+
+def archive_prior_scan(folder, market, day, timestamp):
+    """Preserve reports and JSON on a second run on the same calendar date."""
+    previous_file = folder / "daily" / (day + ".json")
+    if not previous_file.exists():
+        return
+    prior = read_json(previous_file, {})
+    old_at = str(prior.get("observed_at", "unknown")).replace(":", "-").replace("+", "_")
+    backup = folder / "snapshots" / (day + "_" + old_at + ".json")
+    if not backup.exists():
+        backup.parent.mkdir(parents=True, exist_ok=True)
+        backup.write_bytes(previous_file.read_bytes())
+    report = ROOT / "reports" / market / (day + ".html")
+    if report.is_file():
+        archive = report.parent / "snapshots" / (day + "_" + old_at + ".html")
+        if not archive.exists():
+            archive.parent.mkdir(parents=True, exist_ok=True)
+            archive.write_bytes(report.read_bytes())
+
+
 def update(market, incoming, timestamp, day, source_status=None):
     folder = DATA / market
     history = read_json(folder / "history.json", {})
@@ -404,7 +463,11 @@ def update(market, incoming, timestamp, day, source_status=None):
     if not isinstance(old_current, dict):
         old_current = {}
     new_ids = set(incoming)
-    counts = {"new": 0, "reduced": 0, "increased": 0, "returned": 0, "absent": 0}
+    previous = read_json(folder / "latest.json", {})
+    has_primary_baseline = comparable_primary_baseline(previous, timestamp)
+    aliases = prior_listing_aliases(history)
+    counts = {"new": 0, "discovered": 0, "historical_return": 0,
+              "reduced": 0, "increased": 0, "returned": 0, "absent": 0}
     changes = []
     for ident, row in incoming.items():
         entry = history.get(ident)
@@ -416,8 +479,24 @@ def update(market, incoming, timestamp, day, source_status=None):
                      "missing_scans": 0}
             if not events or (events[-1]["price"] != row["price"]):
                 entry["events"].append({"at":timestamp, "price":row["price"],"source":"observed"})
-            counts["new"] += 1
-            changes.append({"kind":"new","id":ident,"old":None,"new":row["price"]})
+            linked = aliases.get("id:" + ident) or aliases.get(
+                "url:" + canonical_listing_url(row.get("url")))
+            if not linked:
+                linked = next((aliases.get("id:" + str(source.get("id")))
+                               for source in row.get("sources", [])
+                               if aliases.get("id:" + str(source.get("id")))), None)
+            if linked and linked != ident:
+                entry["related_listing_id"] = linked
+            # Historic Sreality IDs or cross-listed adverts are not new homes.
+            if events or linked:
+                kind = "historical_return"
+            elif row.get("source") == "sreality.cz" and has_primary_baseline:
+                kind = "new"  # First seen on consecutive *complete* Sreality scans.
+            else:
+                kind = "discovered"  # New to our crawler, NOT necessarily newly posted.
+            counts[kind] += 1
+            changes.append({"kind":kind,"id":ident,"old":None,"new":row["price"],
+                            "interpretation": "first_observed_not_publication_date"})
         else:
             last_price = entry["events"][-1]["price"] if entry.get("events") else row["price"]
             if row["price"] != last_price:
@@ -493,6 +572,8 @@ def update(market, incoming, timestamp, day, source_status=None):
         row["first_seen"] = history[ident]["first_seen"]
         row["events"] = history[ident]["events"]
         row["status"] = "active"
+        if history[ident].get("related_listing_id"):
+            row["related_listing_id"] = history[ident]["related_listing_id"]
     # The public dashboard must retain withdrawn adverts, not only active ones.
     # These do NOT count towards active inventory or verified completed sales.
     dashboard_records = dict(incoming)
@@ -516,6 +597,8 @@ def update(market, incoming, timestamp, day, source_status=None):
         }
     payload = {"date":day,"observed_at":timestamp,"market":market,"source":"sreality.cz",
                "scope":"Ostrava + 15 km advertised search; some listings without GPS not independently radius-verified",
+               "classification_version":2,
+               "classification_note":"New = first observed in a comparable complete Sreality scan, not confirmed date first advertised. Discovered = new to tracking from incomplete or expanded coverage. Historic matches excluded.",
                "counts":counts,"inventory":len(incoming),
                "source_status":source_status or {},
                "sources_scanned":1+sum(1 for x in (source_status or {}).values() if x.get("state") in ("partial_ok", "partial_with_errors")),
@@ -524,12 +607,15 @@ def update(market, incoming, timestamp, day, source_status=None):
                "large_houses":sum((v.get("usable_m2") or 0)>=150 for v in incoming.values()),
                "over_10m":sum(v["price"]>=10_000_000 for v in incoming.values()) if market=="sale" else None,
                "changes":changes,"status":"ok"}
+    archive_prior_scan(folder, market, day, timestamp)
     write_json(folder/"history.json",history)
     export_csv(market, history)
     generate_report(market, payload, incoming, history)
     write_json(folder/"current.json",dashboard_records)
     write_json(folder/"latest.json",payload)
     write_json(folder/"daily"/(day+".json"),payload)
+    safe_at = timestamp.replace(":", "-").replace("+", "_")
+    write_json(folder/"snapshots"/(day+"_"+safe_at+".json"),payload)
     return payload
 
 
@@ -563,7 +649,8 @@ def generate_report(market, payload, current, history):
         return html.escape(str(value or ""), quote=True)
     def money(value):
         return f"{int(value):,} CZK" if value is not None else "Not stated"
-    metrics = [("Active listings", payload["inventory"]), ("New", counts["new"]),
+    metrics = [("Active listings", payload["inventory"]), ("First seen (Sreality)", counts["new"]),
+               ("New to tracker, unverified", counts["discovered"]),
                ("Reduced", counts["reduced"]), ("Increased", counts["increased"]),
                ("Newly absent", counts["absent"])]
     metric_html = "".join('<div class="metric"><small>'+esc(label)+'</small><strong>'+str(value)+'</strong></div>'
@@ -581,7 +668,10 @@ def generate_report(market, payload, current, history):
         img = '<img src="'+esc(photo)+'" loading="lazy" alt="Listing photo">' if (photo.startswith("https://") or photo.startswith("../../assets/")) else '<div class="noimage">Photo unavailable</div>'
         oldprice = money(change.get("old"))
         newprice = money(change.get("new"))
-        subtitle = {"new":"New listing", "reduced":"Price reduced", "increased":"Price increased",
+        subtitle = {"new":"First observed since comparable Sreality scan",
+                    "discovered":"New to tracker — actual advert age unknown",
+                    "historical_return":"Previously known advert / cross-list",
+                    "reduced":"Price reduced", "increased":"Price increased",
                     "absent_unverified":"Advert no longer observed", "returned":"Returned listing"}.get(change["kind"], change["kind"])
         delta = str(change.get("percent"))+"%" if change.get("percent") is not None else ""
         rows.append('<article class="item">'+img+'<div><span class="eyebrow">'+esc(subtitle)+'</span><h3>'+name+
@@ -605,6 +695,8 @@ header p{color:#bbd8cb}.wrap{max-width:1000px;margin:30px auto;padding:0 20px}
 <main class="wrap"><section class="metrics">"""+metric_html+"""</section>
 <p class="notice"><b>Data limitation:</b> Prices are advertised, not completed transaction prices.
 Disappeared adverts are NOT proof of sold or rented status. Search radius may be unverified for individual locations.
+"New" means first observed since a comparable complete Sreality scan, not independently verified as newly published.
+"New to tracker" may reflect expanded or partial portal coverage. Older Sreality IDs and known cross-lists are excluded.
 Additional monthly rental charges are not reliably supplied in these search cards.</p>
 <h2>Daily listing changes</h2>"""+("".join(rows) if rows else "<p>No listing changes were detected in this scan.</p>")+"""
 <p><a class="link" href="../../data/"""+market+"""/history.csv">Download complete historical observations (CSV) ↗</a></p></main></body></html>"""
