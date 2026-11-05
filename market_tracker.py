@@ -456,6 +456,49 @@ def archive_prior_scan(folder, market, day, timestamp):
             archive.write_bytes(report.read_bytes())
 
 
+def aggregate_daily_changes(folder, market, day, scan_changes, timestamp):
+    """Rebuild daily activity from immutable prior snapshots + this scan.
+
+    A repeat same-day scan may detect zero *additional* changes. It must not
+    erase new listings and price cuts observed earlier in the calendar day.
+    Distinct price changes at different times remain separate events.
+    """
+    sources = sorted((folder / "snapshots").glob(day + "_*.json"))
+    daily = folder / "daily" / (day + ".json")
+    if daily.is_file():
+        sources.append(daily)
+    observations = []
+    for source in sources:
+        report = read_json(source, {})
+        if report.get("date") != day or report.get("market") != market:
+            continue
+        observed = report.get("observed_at", "")
+        for event in report.get("changes", []):
+            if isinstance(event, dict) and event.get("kind") and event.get("id"):
+                observations.append((event, observed))
+    observations.extend((event, timestamp) for event in scan_changes)
+
+    seen, changes = set(), []
+    for event, observed in observations:
+        copy = dict(event)
+        copy.setdefault("observed_at", observed)
+        signature = (copy["kind"], copy["id"], copy.get("old"),
+                     copy.get("new"), copy["observed_at"])
+        if signature in seen:
+            continue
+        seen.add(signature)
+        changes.append(copy)
+    changes.sort(key=lambda item: (str(item.get("observed_at", "")), str(item.get("id", ""))))
+
+    counts = {"new": 0, "discovered": 0, "historical_return": 0,
+              "reduced": 0, "increased": 0, "returned": 0, "absent": 0}
+    for event in changes:
+        kind = "absent" if event["kind"] == "absent_unverified" else event["kind"]
+        if kind in counts:
+            counts[kind] += 1
+    return changes, counts
+
+
 def update(market, incoming, timestamp, day, source_status=None):
     folder = DATA / market
     history = read_json(folder / "history.json", {})
@@ -622,6 +665,11 @@ def update(market, incoming, timestamp, day, source_status=None):
                "over_10m":sum(v["price"]>=10_000_000 for v in incoming.values()) if market=="sale" else None,
                "changes":changes,"status":"ok"}
     archive_prior_scan(folder, market, day, timestamp)
+    payload["scan_counts"] = dict(counts)
+    payload["scan_changes"] = [dict(event, observed_at=timestamp) for event in changes]
+    payload["daily_aggregation_version"] = 1
+    payload["changes"], payload["counts"] = aggregate_daily_changes(
+        folder, market, day, changes, timestamp)
     write_json(folder/"history.json",history)
     export_csv(market, history)
     generate_report(market, payload, incoming, history)
