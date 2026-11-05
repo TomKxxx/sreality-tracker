@@ -41,6 +41,30 @@ The scanner prefers property photographs to estate-agent headshots. When archivi
 
 The original listing link is retained. When another source supplies the photo, the metadata includes `photo_source_listing`. Face detection is conservative and can occasionally miss a profile/obscured face or reject a property image; the archive is not a person-identification system. Photo-quality decisions are cached by image hash in `data/photo_quality_cache.json` to avoid repeat work.
 
+## 5 November 2026 deployment and notification reliability
+
+The GitHub Action is the **single source of truth** for fresh observations; ChatGPT's
+scheduled email should read the **completed** GitHub run and the corresponding
+`data/sale/latest.json` and `data/rent/latest.json`, rather than independently
+scraping portals at the same time. The GitHub scan remains targeted for 10:00
+Europe/London. Email reporting occurs later, to allow the scan to finish.
+If GitHub is late or has not committed fresh Prague-dated results, the email
+must say *pending/unverified*, not report yesterday's counts as today's.
+
+GitHub Pages was timing out while publishing a large legacy site artifact.
+`_config.yml` excludes the old `property_images/` directory (over 200 MB)
+and `sreality_alerts.html` (over 80 MB) **from website publication only**.
+Neither is removed from Git, so historical source files and pictures remain
+available in the repository; historic embedded photo links in
+`sreality_property_history.html` use raw.githubusercontent.com instead.
+The current site still publishes separate daily sale/rent reports, history CSVs,
+JSON snapshots and `assets/photos/sale` and `assets/photos/rent`.
+
+The scan workflow explicitly verifies both latest reports, dated snapshots and
+independent history exports before declaring a run successful. Source outages,
+blocked images and secondary-portal incomplete coverage remain explicitly
+unverified; the code cannot guarantee that external sites will never fail.
+
 ## Administration
 
 After merging to \`main\`:
