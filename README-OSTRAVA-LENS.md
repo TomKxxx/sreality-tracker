@@ -65,6 +65,18 @@ independent history exports before declaring a run successful. Source outages,
 blocked images and secondary-portal incomplete coverage remain explicitly
 unverified; the code cannot guarantee that external sites will never fail.
 
+## Same-day reruns
+
+Each complete scan writes an immutable timestamped JSON snapshot in
+`data/<market>/snapshots/`. The latest/daily report now **accumulates all
+changes from that Prague calendar day**, including archived observations
+from earlier runs, rather than replacing daily counts with zero on a second
+scan. The `scan_counts` field records only the newest scan's incremental
+changes; `counts` and `changes` describe the full day. When a previous
+latest report was accidentally overwritten, the earlier archived snapshots
+are used to restore that day's activity. This works independently for
+sale and rental records.
+
 ## Administration
 
 After merging to \`main\`:
