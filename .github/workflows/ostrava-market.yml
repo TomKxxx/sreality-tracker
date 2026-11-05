@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - 'market_tracker.py'
+      - '_config.yml'
       - 'extra_sources.py'
       - 'requirements-market.txt'
       - '.github/workflows/ostrava-market.yml'
@@ -81,6 +82,30 @@ jobs:
           EXTRA_SOURCES: '1'
           ARCHIVE_IMAGES: '1'
         run: python market_tracker.py --market both
+      - name: Verify today's separate sale and rental outputs
+        if: steps.timecheck.outputs.scan == 'true'
+        shell: bash
+        run: |
+          python - <<'PY'
+          from datetime import datetime
+          from pathlib import Path
+          from zoneinfo import ZoneInfo
+          import json
+          today = datetime.now(ZoneInfo("Europe/Prague")).date().isoformat()
+          for market in ("sale", "rent"):
+              folder = Path("data") / market
+              latest = json.loads((folder / "latest.json").read_text(encoding="utf-8"))
+              assert latest["date"] == today, f"{market}: stale scan date"
+              assert latest["market"] == market, f"{market}: wrong market"
+              assert latest["status"] == "ok", f"{market}: scan not OK"
+              assert latest["classification_version"] == 2, f"{market}: old classifier"
+              assert latest["inventory"] > 0, f"{market}: empty/unverified inventory"
+              assert (folder / "history.json").is_file()
+              assert (folder / "history.csv").is_file()
+              assert (folder / "daily" / (today + ".json")).is_file()
+              assert (Path("reports") / market / (today + ".html")).is_file()
+              print(f"Verified {market}: {latest['inventory']} adverts at {latest['observed_at']}")
+          PY
       - name: Save daily snapshots and separate reports
         if: always() && steps.timecheck.outputs.scan == 'true'
         shell: bash
