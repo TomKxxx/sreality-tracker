@@ -14,7 +14,7 @@ A public dashboard for **sale and rental house listings** in and around Ostrava,
 
 ## Daily schedule
 
-\`.github/workflows/ostrava-market.yml\` runs via GitHub Actions at a target of **10:00 Europe/London**, whether the owner's laptop is on or off. UTC 09:00/10:00 schedule slots with a UK local-time guard account for BST/GMT. GitHub may delay scheduled workflows.
+\`.github/workflows/ostrava-market.yml\` runs via GitHub Actions at **10:13 Europe/London**, whether the owner's laptop is on or off. GitHub's native IANA timezone schedule handles BST/GMT. The 13-minute offset avoids top-of-hour congestion; a delayed event still runs rather than being silently skipped by an hour-of-day gate.
 
 The workflow runs \`python -m unittest discover -s tests -v\`, then \`python market_tracker.py --market both\` with \`EXTRA_SOURCES=1\` and \`ARCHIVE_IMAGES=1\`, and commits successful observation snapshots and reports. If the source fails, the previous snapshot is retained and a dated error record is written. Both categories are tracked separately.
 
@@ -46,7 +46,7 @@ The original listing link is retained. When another source supplies the photo, t
 The GitHub Action is the **single source of truth** for fresh observations; ChatGPT's
 scheduled email should read the **completed** GitHub run and the corresponding
 `data/sale/latest.json` and `data/rent/latest.json`, rather than independently
-scraping portals at the same time. The GitHub scan remains targeted for 10:00
+scraping portals at the same time. The GitHub scan is targeted for 10:13
 Europe/London. Email reporting occurs later, to allow the scan to finish.
 If GitHub is late or has not committed fresh Prague-dated results, the email
 must say *pending/unverified*, not report yesterday's counts as today's.
