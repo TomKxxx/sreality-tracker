@@ -11,9 +11,10 @@ on:
       - 'requirements-market.txt'
       - '.github/workflows/ostrava-market.yml'
   schedule:
-    # Both BST and GMT candidates. Gate ensures only the 10:00 UK run proceeds.
-    - cron: '0 9 * * *'
-    - cron: '0 10 * * *'
+    # GitHub supports IANA timezones. Offset from :00 to avoid peak-time queue drops.
+    # Delayed scheduled runs must still execute, never silently skip by wall-clock.
+    - cron: '13 10 * * *'
+      timezone: 'Europe/London'
 
 permissions:
   contents: write
@@ -27,15 +28,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - name: Evaluate UK local time
+      - name: Check valid trigger
         id: timecheck
         shell: bash
         run: |
-          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] || [ "$GITHUB_EVENT_NAME" = "push" ] || [ "$(TZ=Europe/London date +%H)" = "10" ]; then
-            echo "scan=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "scan=false" >> "$GITHUB_OUTPUT"
-          fi
+          # A delayed schedule event is still today's due scan; do not inspect
+          # the worker's current hour, which silently skipped earlier runs.
+          case "$GITHUB_EVENT_NAME" in
+            workflow_dispatch|push|schedule) echo "scan=true" >> "$GITHUB_OUTPUT" ;;
+            *) echo "scan=false" >> "$GITHUB_OUTPUT" ;;
+          esac
       - uses: actions/checkout@v4
         if: steps.timecheck.outputs.scan == 'true'
         with:
