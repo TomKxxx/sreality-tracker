@@ -139,5 +139,54 @@ class PropertyHistoryTests(unittest.TestCase):
                                     "2026-11-02_2026-11-02T10-00-00_01-00.json", {})
                 self.assertEqual(prior["observed_at"], "2026-11-02T10:00:00+01:00")
 
+
+    def test_repeat_same_day_scan_keeps_earlier_new_properties(self):
+        with tempfile.TemporaryDirectory() as folder:
+            with patch.object(m, "DATA", Path(folder)), patch.object(m, "ROOT", Path(folder)), \
+                 patch.object(m, "legacy_events", return_value=[]), \
+                 patch.object(m, "archive_photo", return_value=""):
+                first = m.update("sale", {"sreality:123": self.row()},
+                                 "2026-11-05T10:00:00+01:00", "2026-11-05")
+                self.assertEqual(first["counts"]["discovered"], 1)
+                repeat = m.update("sale", {"sreality:123": self.row()},
+                                  "2026-11-05T10:15:00+01:00", "2026-11-05")
+                self.assertEqual(repeat["scan_counts"]["discovered"], 0)
+                self.assertEqual(repeat["counts"]["discovered"], 1)
+                self.assertEqual(len(repeat["changes"]), 1)
+                self.assertEqual(repeat["changes"][0]["observed_at"],
+                                 "2026-11-05T10:00:00+01:00")
+
+    def test_two_real_reductions_in_one_day_remain_two_events(self):
+        with tempfile.TemporaryDirectory() as folder:
+            with patch.object(m, "DATA", Path(folder)), patch.object(m, "ROOT", Path(folder)), \
+                 patch.object(m, "legacy_events", return_value=[]), \
+                 patch.object(m, "archive_photo", return_value=""):
+                m.update("sale", {"sreality:123": self.row(12000000)},
+                         "2026-11-04T10:00:00+01:00", "2026-11-04")
+                cut = m.update("sale", {"sreality:123": self.row(11000000)},
+                               "2026-11-05T10:00:00+01:00", "2026-11-05")
+                self.assertEqual(cut["counts"]["reduced"], 1)
+                cut2 = m.update("sale", {"sreality:123": self.row(10500000)},
+                                "2026-11-05T11:00:00+01:00", "2026-11-05")
+                self.assertEqual(cut2["scan_counts"]["reduced"], 1)
+                self.assertEqual(cut2["counts"]["reduced"], 2)
+                self.assertEqual(len([x for x in cut2["changes"]
+                                      if x["kind"] == "reduced"]), 2)
+
+    def test_rebuild_today_from_archived_snapshot_when_latest_was_zero(self):
+        with tempfile.TemporaryDirectory() as folder:
+            base = Path(folder) / "rent"
+            (base / "snapshots").mkdir(parents=True)
+            earlier = {"date": "2026-11-05", "market": "rent",
+                       "observed_at": "2026-11-05T09:10:00+01:00",
+                       "changes": [{"kind": "new", "id": "sreality:123",
+                                    "old": None, "new": 40000}]}
+            (base / "snapshots" / "2026-11-05_earlier.json").write_text(
+                json.dumps(earlier), encoding="utf-8")
+            combined, counts = m.aggregate_daily_changes(
+                base, "rent", "2026-11-05", [], "2026-11-05T11:00:00+01:00")
+            self.assertEqual(counts["new"], 1)
+            self.assertEqual(len(combined), 1)
+
 if __name__=="__main__":
     unittest.main()
