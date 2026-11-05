@@ -1,0 +1,18 @@
+# GitHub Pages publishes the compact current property dashboard and verified archives.
+# Original large legacy files remain permanently in git; publishing them caused a
+# 266 MB Pages artifact and timed-out deployment on 2026-11-04.
+# Retain all current sale/rent data, dated reports and assets/photos/ publicly.
+exclude:
+  - .github
+  - .gitignore
+  - property_images
+  - sreality_alerts.html
+  - market_tracker.py
+  - extra_sources.py
+  - photo_quality.py
+  - build_full_history_html.py
+  - sreality_scraper.py
+  - test.py
+  - tests
+  - requirements-market.txt
+  - README-OSTRAVA-LENS.md
