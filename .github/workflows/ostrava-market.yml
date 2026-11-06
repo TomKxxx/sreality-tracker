@@ -11,10 +11,11 @@ on:
       - 'requirements-market.txt'
       - '.github/workflows/ostrava-market.yml'
   schedule:
-    # GitHub supports IANA timezones. Offset from :00 to avoid peak-time queue drops.
-    # Delayed scheduled runs must still execute, never silently skip by wall-clock.
+    # UTC schedules cover BST/GMT plus a fallback if GitHub drops the first event.
+    # The freshness gate below prevents repeat scans on the same Prague day.
+    - cron: '13 9 * * *'
     - cron: '13 10 * * *'
-      timezone: 'Europe/London'
+    - cron: '13 11 * * *'
 
 permissions:
   contents: write
@@ -28,16 +29,43 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - name: Check valid trigger
+      - name: Check due time and existing daily observations
         id: timecheck
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          # A delayed schedule event is still today's due scan; do not inspect
-          # the worker's current hour, which silently skipped earlier runs.
-          case "$GITHUB_EVENT_NAME" in
-            workflow_dispatch|push|schedule) echo "scan=true" >> "$GITHUB_OUTPUT" ;;
-            *) echo "scan=false" >> "$GITHUB_OUTPUT" ;;
-          esac
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import datetime, json, os, urllib.request
+          from zoneinfo import ZoneInfo
+          event = os.environ["GITHUB_EVENT_NAME"]
+          if event != "schedule":
+              print("scan=true")
+              raise SystemExit(0)
+          now = datetime.datetime.now(ZoneInfo("Europe/London"))
+          if (now.hour, now.minute) < (10, 13):
+              print("scan=false")
+              raise SystemExit(0)
+          today = datetime.datetime.now(ZoneInfo("Europe/Prague")).date().isoformat()
+          fresh = True
+          for market in ("sale", "rent"):
+              url = f"https://api.github.com/repos/TomKxxx/sreality-tracker/contents/data/{market}/latest.json"
+              req = urllib.request.Request(url, headers={
+                  "Authorization": "Bearer " + os.environ["GH_TOKEN"],
+                  "Accept": "application/vnd.github.raw+json",
+                  "X-GitHub-Api-Version": "2022-11-28"})
+              try:
+                  with urllib.request.urlopen(req, timeout=15) as response:
+                      payload = json.load(response)
+                  observed = datetime.datetime.fromisoformat(payload["observed_at"])
+                  fresh &= (payload.get("date") == today
+                            and observed.astimezone(ZoneInfo("Europe/Prague")).date().isoformat() == today
+                            and payload.get("status") == "ok")
+              except Exception as exc:
+                  print(f"Freshness check failed for {market}: {exc}", file=__import__("sys").stderr)
+                  fresh = False
+          print("scan=false" if fresh else "scan=true")
+          PY
       - uses: actions/checkout@v4
         if: steps.timecheck.outputs.scan == 'true'
         with:
@@ -109,7 +137,7 @@ jobs:
               print(f"Verified {market}: {latest['inventory']} adverts at {latest['observed_at']}")
           PY
       - name: Save daily snapshots and separate reports
-        if: always() && steps.timecheck.outputs.scan == 'true'
+        if: success() && steps.timecheck.outputs.scan == 'true'
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
