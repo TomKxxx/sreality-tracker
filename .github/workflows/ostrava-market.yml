@@ -13,6 +13,7 @@ on:
   schedule:
     # UTC schedules cover BST/GMT plus a fallback if GitHub drops the first event.
     # The freshness gate below prevents repeat scans on the same Prague day.
+    # Keep the schedule regression test aligned with these UTC fallback slots.
     - cron: '13 9 * * *'
     - cron: '13 10 * * *'
     - cron: '13 11 * * *'
