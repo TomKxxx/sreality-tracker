@@ -15,8 +15,11 @@ class PagesPublicationTests(unittest.TestCase):
     def test_schedule_is_local_and_does_not_skip_late_events(self):
         workflow = (ROOT / ".github" / "workflows" / "ostrava-market.yml").read_text(encoding="utf-8")
         self.assertIn("cron: '13 10 * * *'", workflow)
-        self.assertIn("timezone: 'Europe/London'", workflow)
-        self.assertIn("workflow_dispatch|push|schedule", workflow)
+        self.assertIn("cron: '13 9 * * *'", workflow)
+        self.assertIn("cron: '13 11 * * *'", workflow)
+        self.assertIn('ZoneInfo("Europe/London")', workflow)
+        self.assertIn('event != "schedule"', workflow)
+        self.assertIn('payload.get("date") == today', workflow)
         self.assertNotIn("date +%H", workflow)
 
     def test_original_history_uses_git_archive_photo_urls(self):
