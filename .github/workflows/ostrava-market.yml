@@ -14,7 +14,7 @@ on:
     # UTC schedules cover BST/GMT plus a fallback if GitHub drops the first event.
     # The freshness gate below prevents repeat scans on the same Prague day.
     # Keep the schedule regression test aligned with these UTC fallback slots.
-    # Recovery watchdog trigger: 2026-11-09
+    # Recovery watchdog trigger: 2026-11-11
     - cron: '13 9 * * *'
     - cron: '13 10 * * *'
     - cron: '13 11 * * *'
