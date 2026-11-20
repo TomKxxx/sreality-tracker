@@ -164,3 +164,5 @@ jobs:
           else
             echo "No new observations to commit"
           fi
+
+# Recovery watchdog trigger 2026-11-20 12:16 UTC
